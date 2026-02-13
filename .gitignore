@@ -12,3 +12,9 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Data
+data/chroma_db_corpus/
+
+# Archive
+archive/
