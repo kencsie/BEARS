@@ -16,5 +16,8 @@ __pycache__/
 # Data
 data/chroma_db_corpus/
 
+# Output
+output/
+
 # Archive
 archive/
