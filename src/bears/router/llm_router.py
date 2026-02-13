@@ -34,8 +34,8 @@ Rules:
 1. For simple factual questions, select ["hybrid"].
 2. For questions about relationships or requiring graph traversal, select ["kg"].
 3. For complex multi-hop questions requiring iterative reasoning, select ["agentic"].
-4. You may select multiple agents if the question could benefit from multiple approaches.
-5. Return your decision as JSON with fields: selected_agents (list of agent names), reasoning (brief explanation), confidence (0.0 to 1.0).
+4. Always select exactly one agent — the single best fit for the question.
+5. Return your decision as JSON with fields: selected_agents (list with one agent name), reasoning (brief explanation), confidence (0.0 to 1.0).
 """
 
 

@@ -11,34 +11,37 @@ from typing import Any, Dict
 from langgraph.graph import END, StateGraph
 
 from bears.agents.base import AgentResponse
-from bears.agents.registry import get_enabled_agents
-from bears.orchestrator.nodes import merge_node, router_node, wrap_agent_as_node
+from bears.orchestrator.nodes import (
+    agentic_agent_node,
+    hybrid_agent_node,
+    kg_agent_node,
+    route_after_router,
+    router_node,
+)
 from bears.orchestrator.state import OrchestratorState
 
 logger = logging.getLogger(__name__)
 
 
-def create_orchestrator_workflow(registry: Dict[str, Any] = None) -> StateGraph:
-    """Build the orchestrator StateGraph with router, agent nodes, and merge."""
-    agents = get_enabled_agents()
-
+def create_orchestrator_workflow():
+    """Build the orchestrator StateGraph: router -> single agent -> END."""
     workflow = StateGraph(OrchestratorState)
 
-    # Add router node
     workflow.add_node("router", router_node)
+    workflow.add_node("hybrid", hybrid_agent_node)
+    workflow.add_node("kg", kg_agent_node)
+    workflow.add_node("agentic", agentic_agent_node)
 
-    # Add agent nodes
-    for agent_name, agent in agents.items():
-        node_fn = wrap_agent_as_node(agent)
-        workflow.add_node(agent_name, node_fn)
-        workflow.add_edge(agent_name, "merge")
-
-    # Add merge node
-    workflow.add_node("merge", merge_node)
-
-    # Set entry point
     workflow.set_entry_point("router")
-    workflow.add_edge("merge", END)
+
+    workflow.add_conditional_edges("router", route_after_router, {
+        "hybrid": "hybrid",
+        "kg": "kg",
+        "agentic": "agentic",
+    })
+    workflow.add_edge("hybrid", END)
+    workflow.add_edge("kg", END)
+    workflow.add_edge("agentic", END)
 
     return workflow.compile()
 
@@ -62,6 +65,7 @@ async def run_orchestrated_rag(question: str) -> Dict[str, Any]:
 
     initial_state = {
         "question": question,
+        "route": "",
         "route_decision": None,
         "agent_results": [],
         "final_answer": "",
@@ -74,9 +78,9 @@ async def run_orchestrated_rag(question: str) -> Dict[str, Any]:
 
     total_time = time.time() - start_time
 
-    # Extract best agent result for doc_ids and context
+    # Single agent result
     agent_results = result.get("agent_results", [])
-    best = max(agent_results, key=lambda r: r.confidence) if agent_results else AgentResponse(answer="")
+    best = agent_results[0] if agent_results else AgentResponse(answer="")
 
     return {
         "question": question,
