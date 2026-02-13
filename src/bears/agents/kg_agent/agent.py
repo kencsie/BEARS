@@ -7,7 +7,6 @@ Wraps the 5-node pipeline logic into a BaseRAGAgent:
   3. LLM rerank -> 4. graph retrieval -> 5. answer generation
 """
 
-import asyncio
 import logging
 import re
 from typing import Any, Dict, List, Optional, Set
@@ -142,9 +141,7 @@ B國政府所在地
         # Graph expansion
         if initial_entities:
             try:
-                related = asyncio.run(
-                    self._graph_retriever.get_related_entities(list(initial_entities)[:5], max_neighbors=3)
-                )
+                related = self._graph_retriever.get_related_entities(list(initial_entities)[:5], max_neighbors=3)
                 for entity in related[:5]:
                     entity_docs = self._vector_retriever.retrieve_with_metadata(entity, k=2)
                     for doc_meta in entity_docs:
@@ -220,10 +217,10 @@ B國政府所在地
 
     # ---- Node 4: Graph Retrieval ----
 
-    async def _retrieve_graph(self, question: str) -> List[str]:
+    def _retrieve_graph(self, question: str) -> List[str]:
         """Retrieve graph context (entity relationships)."""
         try:
-            return await self._graph_retriever.retrieve(question, max_entities=3, max_relations_per_entity=10)
+            return self._graph_retriever.retrieve(question, max_entities=3, max_relations_per_entity=10)
         except Exception as e:
             logger.warning(f"Graph retrieval error: {e}")
             return []
@@ -370,7 +367,7 @@ B國政府所在地
             vector_context, retrieved_ids = self._rerank(question, candidates)
 
             # Node 4: Graph retrieval
-            graph_context = await self._retrieve_graph(question)
+            graph_context = self._retrieve_graph(question)
 
             # Node 5: Generate answer
             answer = self._generate_answer(question, vector_context, graph_context)

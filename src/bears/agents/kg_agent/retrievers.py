@@ -71,10 +71,10 @@ class GraphRetriever:
         )
         logger.info("GraphRetriever initialized")
 
-    async def retrieve(self, question: str, max_entities: int = 3, max_relations_per_entity: int = 5) -> List[str]:
+    def retrieve(self, question: str, max_entities: int = 3, max_relations_per_entity: int = 5) -> List[str]:
         """Extract entities from question, query graph, return relationship strings."""
         try:
-            entities = await self._extract_entities(question)
+            entities = self._extract_entities(question)
             if not entities:
                 return []
 
@@ -92,7 +92,7 @@ class GraphRetriever:
             logger.warning(f"Graph retrieval failed: {e}")
             return []
 
-    async def get_related_entities(self, entities: List[str], max_neighbors: int = 5) -> List[str]:
+    def get_related_entities(self, entities: List[str], max_neighbors: int = 5) -> List[str]:
         """Find related entities from graph for query expansion."""
         try:
             related_entities = set()
@@ -107,7 +107,7 @@ class GraphRetriever:
             logger.warning(f"Graph expansion failed: {e}")
             return []
 
-    async def _extract_entities(self, question: str) -> List[str]:
+    def _extract_entities(self, question: str) -> List[str]:
         """Extract entities from question using LLM."""
         try:
             extraction_prompt = ChatPromptTemplate.from_messages([
