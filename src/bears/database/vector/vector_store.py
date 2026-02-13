@@ -20,7 +20,7 @@ class VectorStoreManager:
     def __init__(
         self,
         collection_name: str = "corpus_docs",
-        persist_directory: str = "./chroma_db_corpus",
+        persist_directory: str = "data/chroma_db_corpus",
         embedding_model: str = "text-embedding-3-small"
     ):
         settings = get_settings()
