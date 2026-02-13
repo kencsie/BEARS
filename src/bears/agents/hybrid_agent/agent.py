@@ -84,7 +84,14 @@ class HybridRAGAgent(BaseRAGAgent):
                 ("human", "{question}"),
             ])
             chain = prompt | self._llm
-            response = chain.invoke({"question": question})
+
+            from bears.core.langfuse_helper import get_callbacks
+            callbacks = get_callbacks()
+
+            response = chain.invoke(
+                {"question": question},
+                config={"callbacks": callbacks} if callbacks else {},
+            )
 
             variants = [question]
             for line in response.content.strip().split("\n"):
@@ -139,7 +146,14 @@ class HybridRAGAgent(BaseRAGAgent):
 
         try:
             chain = prompt | self._llm
-            response = chain.invoke({"context": context_str, "question": question})
+
+            from bears.core.langfuse_helper import get_callbacks
+            callbacks = get_callbacks()
+
+            response = chain.invoke(
+                {"context": context_str, "question": question},
+                config={"callbacks": callbacks} if callbacks else {},
+            )
             return response.content
         except Exception as e:
             return f"Error generating answer: {e}"
