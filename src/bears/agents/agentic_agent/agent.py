@@ -9,7 +9,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from openai import OpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 from bears.agents.agentic_agent.prompts import (
     GENERATE_SYSTEM_PROMPT,
@@ -19,6 +20,7 @@ from bears.agents.agentic_agent.prompts import (
 )
 from bears.agents.base import AgentCapability, AgentResponse, BaseRAGAgent
 from bears.core.config import get_settings
+from bears.core.langfuse_helper import get_callbacks
 from bears.core.experiment import ExperimentConfig
 from bears.database.vector.vector_store import VectorStoreManager
 
@@ -42,8 +44,11 @@ class AgenticAgent(BaseRAGAgent):
         settings = get_settings()
 
         self._vector_store = VectorStoreManager()
-        self._client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self._model = self.exp.model
+        self._llm = ChatOpenAI(
+            model=self.exp.model,
+            api_key=settings.OPENAI_API_KEY,
+            temperature=0.0,
+        )
 
     @property
     def name(self) -> str:
@@ -110,16 +115,19 @@ class AgenticAgent(BaseRAGAgent):
         }
 
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": "你只輸出 JSON，符合 schema：{indices:[...]}。"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.0,
+            chain_prompt = ChatPromptTemplate.from_messages([
+                ("system", "你只輸出 JSON，符合 schema：{{indices:[...]}}。"),
+                ("human", "{user_input}"),
+            ])
+            llm_with_format = self._llm.bind(
                 response_format={"type": "json_schema", "json_schema": schema},
             )
-            content = (resp.choices[0].message.content or "").strip()
+            chain = chain_prompt | llm_with_format
+            resp = chain.invoke(
+                {"user_input": prompt},
+                config={"callbacks": get_callbacks()},
+            )
+            content = (resp.content or "").strip()
             parsed = json.loads(content)
             indices = parsed.get("indices", [])
             if not isinstance(indices, list):
@@ -145,15 +153,16 @@ class AgenticAgent(BaseRAGAgent):
         prompt = STEP_REASONER_PROMPT.format(question=question, contexts=ctx_text, history=hist_text)
 
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": "你只輸出 DONE 或下一個檢索 query（單行）。"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.0,
+            chain_prompt = ChatPromptTemplate.from_messages([
+                ("system", "你只輸出 DONE 或下一個檢索 query（單行）。"),
+                ("human", "{user_input}"),
+            ])
+            chain = chain_prompt | self._llm
+            resp = chain.invoke(
+                {"user_input": prompt},
+                config={"callbacks": get_callbacks()},
             )
-            text = (resp.choices[0].message.content or "").strip().splitlines()[0].strip()
+            text = (resp.content or "").strip().splitlines()[0].strip()
             return text
         except Exception:
             return "DONE"
@@ -165,15 +174,16 @@ class AgenticAgent(BaseRAGAgent):
         prompt = LLM_GRADE_PROMPT.format(question=question, content=content)
 
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": "你只能輸出 0,1,2,3 其中一個整數。不要輸出其他字。"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.0,
+            chain_prompt = ChatPromptTemplate.from_messages([
+                ("system", "你只能輸出 0,1,2,3 其中一個整數。不要輸出其他字。"),
+                ("human", "{user_input}"),
+            ])
+            chain = chain_prompt | self._llm
+            resp = chain.invoke(
+                {"user_input": prompt},
+                config={"callbacks": get_callbacks()},
             )
-            text = (resp.choices[0].message.content or "").strip().splitlines()[0].strip()
+            text = (resp.content or "").strip().splitlines()[0].strip()
             if text and text[0] in "0123":
                 return int(text[0])
             return 0
@@ -191,15 +201,16 @@ class AgenticAgent(BaseRAGAgent):
             context_str += f"文件 [{i}] (distance_score={doc.get('score', 0):.4f}):\n{doc.get('content_preview', '')}\n\n"
 
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": GENERATE_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"【參考文件】\n{context_str}\n\n【問題】\n{question}"},
-                ],
-                temperature=0.3,
+            chain_prompt = ChatPromptTemplate.from_messages([
+                ("system", GENERATE_SYSTEM_PROMPT),
+                ("human", "{user_input}"),
+            ])
+            chain = chain_prompt | self._llm.bind(temperature=0.3)
+            resp = chain.invoke(
+                {"user_input": f"【參考文件】\n{context_str}\n\n【問題】\n{question}"},
+                config={"callbacks": get_callbacks()},
             )
-            return (resp.choices[0].message.content or "").strip()
+            return (resp.content or "").strip()
         except Exception as e:
             return f"Error: {e}"
 
