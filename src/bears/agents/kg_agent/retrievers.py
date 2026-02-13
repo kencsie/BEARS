@@ -111,7 +111,7 @@ class GraphRetriever:
         """Extract entities from question using LLM."""
         try:
             extraction_prompt = ChatPromptTemplate.from_messages([
-                ("system", "Extract main entities from the question. Return as a comma-separated list. Only entity names, no explanations."),
+                ("system", "從問題中提取主要實體，以逗號分隔的列表形式回答。只返回實體名稱，不需要其他說明。"),
                 ("human", "{question}"),
             ])
             chain = extraction_prompt | self.llm

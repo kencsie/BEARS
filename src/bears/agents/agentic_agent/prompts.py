@@ -4,66 +4,66 @@ Agentic agent prompt templates.
 Ported from archive/AgenticFlow/prompts/ and run_agent.py defaults.
 """
 
-STEP_REASONER_PROMPT = """You are a "next-step planner" for a retrieval-based QA system.
-Goal: Iteratively find information to answer the user's question. Output one instruction at a time:
+STEP_REASONER_PROMPT = """你是一個檢索式問答系統的「下一步規劃器」。
+目標：逐步找資料以回答使用者問題。你每次只能輸出一個指令：
 
-1) If current content is sufficient to answer: output DONE
-2) If not sufficient: output the next search query (one sentence, be specific)
+1) 若現有內容已足以回答：輸出 DONE
+2) 若仍不足：輸出下一個應該送去檢索的「中文搜尋 query」（一句話即可，越具體越好）
 
-Constraints:
-- No explanations, no multi-line, no JSON
-- Only output DONE or a single query
+限制：
+- 不要輸出解釋、不要輸出多行、不要輸出 JSON
+- 只輸出 DONE 或 一句 query
 
-Important: If the question contains constraints (ranking, second largest, specific year, etc.),
-you must verify the constraint is satisfied before outputting DONE.
+重要：如果問題包含「排名、第二大、某年、某地、某條件」等約束，
+你必須確認約束已被滿足才可輸出 DONE；否則請產生能補足約束的下一個 query。
 
-[Original Question]
+【原始問題】
 {question}
 
-[Accumulated Retrieval Snippets (may contain noise)]
+【目前累積到的檢索片段（可能有噪音）】
 {contexts}
 
-[Previous Steps (step -> query)]
+【先前步驟（步驟 -> query）】
 {history}
 """
 
-LLM_RERANK_PROMPT = """You are a professional document re-ranker.
-The user's query is: "{query}"
+LLM_RERANK_PROMPT = """你是一個專業的文件排序助手 (Re-ranker)。
+使用者的查詢是："{query}"
 
-Below are {num_docs} candidate documents. Analyze their relevance to the query:
+以下是 {num_docs} 篇候選文件，請分析它們與查詢的相關性：
 
 {docs_list}
 
-[Task]
-Select the most relevant {top_k} documents, ranked by relevance (high to low).
-Return format must be a pure JSON array of document index numbers.
-Example: [2, 0, 5, 1, 8]
+【任務】
+請選出最相關的 {top_k} 篇文件，並按相關性由高到低排序。
+回傳格式必須是純 JSON object，包含文件的索引編號 (index)。
+例如：{{"indices":[2, 0, 5, 1, 8]}}
 
-Notes:
-1. If a document is completely irrelevant, do not include it.
-2. Even if fewer than {top_k} are relevant, only return relevant ones.
-3. Output only JSON, no explanations.
+注意：
+1. 如果文件完全不相關，不要包含在列表中。
+2. 即使相關文件少於 {top_k} 篇，也只回傳相關的即可。
+3. 不要輸出任何解釋，只輸出 JSON。
 """
 
-LLM_GRADE_PROMPT = """You are a retrieval result relevance scorer.
+LLM_GRADE_PROMPT = """你是一個檢索結果的相關性評分器。
 
-Judge whether the "Document Content" helps answer the "Question".
-Output only a single integer score, no explanations.
+請判斷「文件內容」是否有助於回答「問題」。
+你只能輸出一個整數分數，不要輸出任何說明文字。
 
-Scoring criteria:
-3 = Directly contains answerable facts (names/titles/companies/dates/numbers)
-2 = Contains key bridging information (necessary for multi-hop)
-1 = Background relevant but insufficient as evidence
-0 = Irrelevant or noise
+評分標準：
+3 = 直接包含可回答問題的事實（人名/職稱/公司/日期/數字等關鍵字段）
+2 = 包含關鍵橋接資訊（multi-hop 必要）
+1 = 背景相關但不足以作為證據
+0 = 不相關或噪音
 
-[Question]
+【問題】
 {question}
 
-[Document Content]
+【文件內容】
 {content}
 """
 
-GENERATE_SYSTEM_PROMPT = """You are a professional assistant. Answer the [Question] based on the [Reference Documents].
-If documents mention role changes (e.g., former vs. current), be sure to distinguish clearly.
-If documents are insufficient, say "Insufficient data to answer" and indicate what is missing.
+GENERATE_SYSTEM_PROMPT = """你是一個專業助手。請根據【參考文件】回答【問題】。
+若文件中有提到相關人物的職位變動（如前任、現任），請務必區分清楚。
+若文件不足以回答，請直接說「資料不足以回答」並指出缺少什麼資訊。
 """

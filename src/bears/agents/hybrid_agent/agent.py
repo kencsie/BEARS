@@ -123,13 +123,18 @@ class HybridRAGAgent(BaseRAGAgent):
         context_str = ""
         for i, ctx in enumerate(contexts[: self.exp.top_k]):
             source = ctx.get("original_source", "unknown")
-            context_str += f"[{i + 1}] (source: {source}):\n{ctx['content']}\n\n"
+            context_str += f"[{i + 1}] (來源: {source}):\n{ctx['content']}\n\n"
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a professional QA assistant. Answer the question based on the "
-                       "provided reference documents. If the references are insufficient, say so. "
-                       "Do not fabricate facts."),
-            ("human", "References:\n{context}\n\nQuestion: {question}\n\nPlease provide a complete answer:"),
+            ("system", "You are a helpful assistant that answers questions in Traditional Chinese."),
+            ("human", """你是一個專業的繁體中文問答助手。請根據以下的參考資訊回答使用者的問題。
+如果參考資訊不足以回答，請說「根據提供的資訊無法回答此問題」。請勿編造事實。
+
+參考資訊：
+{context}
+
+使用者問題：{question}
+請提供完整且有條理的回答："""),
         ])
 
         try:

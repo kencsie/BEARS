@@ -87,7 +87,7 @@ class AgenticAgent(BaseRAGAgent):
             content = (getattr(doc, "page_content", "") or "").replace("\n", " ").strip()
             if len(content) > max_chars_per_doc:
                 content = content[:max_chars_per_doc] + "..."
-            docs_text += f"Document [{i}]: {content}\n\n"
+            docs_text += f"文件 [{i}]: {content}\n\n"
 
         prompt = LLM_RERANK_PROMPT.format(
             query=query, num_docs=len(docs), docs_list=docs_text, top_k=top_k
@@ -101,7 +101,7 @@ class AgenticAgent(BaseRAGAgent):
                     "indices": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "Most relevant document indices (descending relevance)",
+                        "description": "最相關文件的索引列表（由高到低）",
                     }
                 },
                 "required": ["indices"],
@@ -113,7 +113,7 @@ class AgenticAgent(BaseRAGAgent):
             resp = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": "Output only JSON matching schema: {indices:[...]}."},
+                    {"role": "system", "content": "你只輸出 JSON，符合 schema：{indices:[...]}。"},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
@@ -148,7 +148,7 @@ class AgenticAgent(BaseRAGAgent):
             resp = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": "Output only DONE or the next retrieval query (single line)."},
+                    {"role": "system", "content": "你只輸出 DONE 或下一個檢索 query（單行）。"},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
@@ -168,7 +168,7 @@ class AgenticAgent(BaseRAGAgent):
             resp = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": "Output only one integer: 0, 1, 2, or 3. Nothing else."},
+                    {"role": "system", "content": "你只能輸出 0,1,2,3 其中一個整數。不要輸出其他字。"},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
@@ -184,18 +184,18 @@ class AgenticAgent(BaseRAGAgent):
 
     def _generate_answer(self, question: str, final_docs: List[Dict[str, Any]]) -> str:
         if not final_docs:
-            return "Insufficient data to answer."
+            return "資料不足以回答。"
 
         context_str = ""
         for i, doc in enumerate(final_docs, 1):
-            context_str += f"Document [{i}] (score={doc.get('score', 0):.4f}):\n{doc.get('content_preview', '')}\n\n"
+            context_str += f"文件 [{i}] (distance_score={doc.get('score', 0):.4f}):\n{doc.get('content_preview', '')}\n\n"
 
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
                     {"role": "system", "content": GENERATE_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"[Reference Documents]\n{context_str}\n\n[Question]\n{question}"},
+                    {"role": "user", "content": f"【參考文件】\n{context_str}\n\n【問題】\n{question}"},
                 ],
                 temperature=0.3,
             )
@@ -277,7 +277,7 @@ class AgenticAgent(BaseRAGAgent):
         final_candidates = ranked_by_dist[:min(candidate_k, len(ranked_by_dist))]
 
         if not final_candidates:
-            return [], "Insufficient data to answer.", list(set(all_doc_ids))
+            return [], "資料不足以回答。", list(set(all_doc_ids))
 
         dists = [float(p["best_score"]) for _, p in final_candidates]
         d_min, d_max = min(dists), max(dists)
