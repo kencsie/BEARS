@@ -6,6 +6,7 @@ Provides unified Langfuse callback configuration.
 
 import logging
 from typing import List, Optional
+from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 from bears.core.config import get_settings
 
@@ -24,7 +25,14 @@ def get_langfuse_callback() -> Optional[LangfuseCallbackHandler]:
             logger.info("Langfuse configuration incomplete, tracing disabled")
             return None
 
-        langfuse_handler = LangfuseCallbackHandler()
+        Langfuse(
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+            secret_key=settings.LANGFUSE_SECRET_KEY,
+            host=settings.LANGFUSE_HOST,
+        )
+        langfuse_handler = LangfuseCallbackHandler(
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+        )
         logger.info("Langfuse tracing enabled")
         return langfuse_handler
 
