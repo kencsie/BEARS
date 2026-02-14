@@ -121,6 +121,19 @@ uv sync
 
 ![啟動資料庫](docs/images/neo4j/啟動資料庫.png)
 
+#### 2.6 點選插件按鈕
+
+在實例頁面中，點擊右側的 **Plugins** 標籤：
+
+![點選插件按鈕](docs/images/neo4j/點選插件按鈕.png)
+
+#### 2.7 安裝 APOC 插件
+
+找到 **APOC** 插件，點擊 **Install** 安裝。此插件為必要依賴，未安裝會導致程式執行錯誤：
+
+![安裝 APOC 插件](docs/images/neo4j/安裝APOC插件.png)
+
+
 ### 3. 設定 Langfuse（LLM 追蹤）
 
 前往 [us.cloud.langfuse.com](https://us.cloud.langfuse.com) 註冊並登入。
@@ -189,8 +202,8 @@ uv run python scripts/build_db.py --limit 100
 # 測試指令（十筆資料）
 uv run bears-eval --agent hybrid --limit 10 --output output/hybrid.json --detailed
 uv run bears-eval --agent kg --limit 10 --output output/kg.json --detailed
-uv run bears-eval --agent agentic --limit 10 --output output/agentic.json --detailed
-uv run bears-eval --orchestrator --limit 10 --output output/orchestrator.json
+uv run bears-eval --agent agentic --limit 1 --output output/agentic.json --detailed
+uv run bears-eval --orchestrator --limit 1 --output output/orchestrator.json
 
 # 評估單一 agent
 uv run bears-eval --agent hybrid
