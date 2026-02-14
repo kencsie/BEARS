@@ -186,6 +186,12 @@ uv run python scripts/build_db.py --limit 100
 ### CLI 評估（主要流程）
 
 ```bash
+# 測試指令（十筆資料）
+uv run bears-eval --agent hybrid --limit 10 --output output/hybrid.json --detailed
+uv run bears-eval --agent kg --limit 10 --output output/kg.json --detailed
+uv run bears-eval --agent agentic --limit 10 --output output/agentic.json --detailed
+uv run bears-eval --orchestrator --limit 10 --output output/orchestrator.json
+
 # 評估單一 agent
 uv run bears-eval --agent hybrid
 uv run bears-eval --agent kg
