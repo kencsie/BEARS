@@ -89,17 +89,75 @@ git checkout dev
 uv sync
 ```
 
-### 2. 設定環境變數
+### 2. 設定 Neo4j（KG Agent 需要）
+
+#### 2.1 下載 Neo4j Desktop
+
+前往 [neo4j.com/download/](https://neo4j.com/download/) 下載 Neo4j Desktop：
+
+![Neo4j 下載頁面](docs/images/neo4j/neo4j下載.png)
+
+#### 2.2 建立實例
+
+開啟 Neo4j Desktop，點擊右上角 **Create instance**：
+
+![建立實例](docs/images/neo4j/建立實例.png)
+
+#### 2.3 匯入備份檔案
+
+在 Create Instance 對話框中，展開底部的 **Load from .dump, .backup or .tar (optional)**，放入備份檔案：
+
+![匯入備份檔案](docs/images/neo4j/匯入備份檔案.png)
+
+#### 2.4 填寫資訊
+
+填入 Instance name、密碼，並確認已選擇備份檔案，點擊 **Create**：
+
+![填寫資訊](docs/images/neo4j/填寫資訊.png)
+
+#### 2.5 啟動資料庫
+
+建立完成後，點擊 **Start instance** 啟動資料庫：
+
+![啟動資料庫](docs/images/neo4j/啟動資料庫.png)
+
+### 3. 設定 Langfuse（LLM 追蹤）
+
+前往 [us.cloud.langfuse.com](https://us.cloud.langfuse.com) 註冊並登入。
+
+#### 3.1 建立組織
+
+在開始頁面點擊 **+ New Organization**：
+
+![Langfuse 開始頁面](docs/images/langfuse/開始頁面.png)
+
+輸入組織名稱，點擊 **Create**：
+
+![建立組織](docs/images/langfuse/建立組織.png)
+
+#### 3.2 建立專案
+
+輸入專案名稱（如 `BEARS`），點擊 **Create**：
+
+![建立專案](docs/images/langfuse/建立專案.png)
+
+#### 3.3 建立 API 金鑰
+
+進入 **Settings → API Keys**，點擊 **+ Create new API keys**，將產生的 Secret Key 和 Public Key 記下，稍後填入 `.env`：
+
+![建立 API 金鑰](docs/images/langfuse/建立API%20金鑰.png)
+
+### 4. 設定環境變數
 
 ```bash
 cp .env.example .env
 ```
 
-編輯 `.env`，填入實際的 API Key 和資料庫連線資訊：
+編輯 `.env`，填入 API Key、Neo4j 連線資訊（步驟 2）和 Langfuse 金鑰（步驟 3）：
 
 ```env
 OPENAI_API_KEY=sk-...
-NEO4J_URI=neo4j+s://xxx.databases.neo4j.io
+NEO4J_URI=neo4j://127.0.0.1:7687
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=your_password
 LANGFUSE_SECRET_KEY=sk-lf-...
@@ -107,7 +165,7 @@ LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_HOST=https://us.cloud.langfuse.com
 ```
 
-### 3. 建立資料庫
+### 5. 建立向量資料庫
 
 ```bash
 # 建立向量 + 圖譜資料庫
