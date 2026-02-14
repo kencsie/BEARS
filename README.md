@@ -214,12 +214,12 @@ print(result["answer"])
 
 ## 可用 Agent
 
-| 名稱 | 策略 | 來源 |
-|------|------|------|
-| `hybrid` | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成 | `archive/hybrid_rag/` |
-| `kg` | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） | `archive/GraphRag_hybrid_1/` |
-| `agentic` | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成 | `archive/AgenticFlow/` |
-| `multimodal` | Stub（未實作） | — |
+| 名稱 | 策略 |
+|------|------|
+| `hybrid` | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成 |
+| `kg` | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） |
+| `agentic` | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成 |
+| `multimodal` | Stub（未實作） |
 
 ## 設定系統
 
