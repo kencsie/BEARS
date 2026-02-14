@@ -1,6 +1,6 @@
 # BEARS — Router-Guided Agentic RAG Orchestrator
 
-BEARS 是一個多 Agent RAG（Retrieval-Augmented Generation）系統。透過 LLM Router 分析使用者問題，動態調度不同 RAG Agent 協作，最後由 Orchestrator 合併最佳答案。
+BEARS 是一個多 Agent RAG（Retrieval-Augmented Generation）系統。透過 LLM Router 分析使用者問題，動態調度不同 RAG Agent，最後由 Orchestrator 回傳最佳答案。
 
 ## 架構總覽
 
@@ -9,20 +9,15 @@ User Question
       │
       ▼
 ┌──────────┐
-│  Router   │  ← LLM 分類意圖，決定派發哪些 Agent
+│  Router   │  ← LLM 分類意圖，選擇最適合的單一 Agent
 └────┬─────┘
-     │  fan-out
+     │  route to best agent
      ▼
 ┌─────────┐  ┌──────────┐  ┌───────────┐
 │ Hybrid  │  │    KG    │  │  Agentic  │   ← 各 Agent 獨立 retrieve + generate
 └────┬────┘  └────┬─────┘  └─────┬─────┘
      │            │              │
      └────────────┼──────────────┘
-                  ▼
-           ┌───────────┐
-           │   Merge   │  ← 選擇 confidence 最高的答案
-           └───────────┘
-                  │
                   ▼
             Final Answer
 ```
@@ -31,38 +26,46 @@ User Question
 
 ```
 BEARS/
-├── src/bears/                  # 主要套件
-│   ├── core/                   # 系統設定 + 實驗參數
-│   │   ├── config.py           #   Pydantic Settings + .env（secrets）
-│   │   ├── experiment.py       #   Pydantic BaseModel + YAML（實驗參數）
-│   │   └── langfuse_helper.py  #   Langfuse observability
-│   ├── database/               # 資料層
-│   │   ├── vector/             #   ChromaDB 向量儲存 + 資料載入
-│   │   └── graph/              #   Neo4j 圖譜儲存 + 建構
-│   ├── router/                 # 路由層
-│   │   ├── base.py             #   BaseRouter ABC + RouterOutput
-│   │   └── llm_router.py      #   GPT-4o-mini 分類路由
-│   ├── agents/                 # Agent 層
-│   │   ├── base.py             #   BaseRAGAgent ABC + AgentResponse
-│   │   ├── registry.py         #   Agent 註冊表（動態 import）
-│   │   ├── hybrid_agent/       #   向量搜尋 + RRF 融合
-│   │   ├── kg_agent/           #   知識圖譜 5 節點 pipeline
-│   │   ├── agentic_agent/      #   多步驟迭代檢索
-│   │   └── multimodal_agent/   #   Stub（未來擴充）
-│   ├── orchestrator/           # 編排層（LangGraph StateGraph）
-│   │   ├── state.py            #   OrchestratorState
-│   │   ├── nodes.py            #   router / agent wrapper / merge 節點
-│   │   └── graph.py            #   StateGraph 組裝 + 入口函式
-│   └── evaluation/             # 評估系統
-│       ├── schemas.py          #   SourceMetrics, QuestionDetail
-│       ├── metrics.py          #   Hit Rate, MRR, MAP
-│       ├── evaluator.py        #   AgentEvaluator + OrchestratorEvaluator
-│       └── cli.py              #   CLI 入口（bears-eval）
-├── experiments/                # 實驗參數 YAML（進 git）
+├── src/bears/                      # 主要套件
+│   ├── core/                       # 系統設定 + 實驗參數
+│   │   ├── config.py               #   Pydantic Settings + .env（secrets）
+│   │   ├── experiment.py           #   Pydantic BaseModel + YAML（實驗參數）
+│   │   └── langfuse_helper.py      #   Langfuse observability
+│   ├── database/                   # 資料層
+│   │   ├── vector/                 #   ChromaDB 向量儲存 + 資料載入
+│   │   │   ├── vector_store.py     #     ChromaDB 連線 + CRUD
+│   │   │   └── vector_builder.py   #     載入 corpus → 建立向量 DB
+│   │   └── graph/                  #   Neo4j 圖譜儲存 + 建構
+│   │       ├── graph_store.py      #     Neo4j 連線 + CRUD
+│   │       └── graph_builder.py    #     LLM 實體抽取 → 建立圖譜
+│   ├── router/                     # 路由層
+│   │   ├── base.py                 #   BaseRouter ABC + RouterOutput
+│   │   └── llm_router.py          #   GPT-4o-mini 分類路由
+│   ├── agents/                     # Agent 層
+│   │   ├── base.py                 #   BaseRAGAgent ABC + AgentResponse
+│   │   ├── registry.py             #   Agent 註冊表（動態 import）
+│   │   ├── hybrid_agent/           #   向量搜尋 + 多查詢擴展 + RRF 融合
+│   │   ├── kg_agent/               #   知識圖譜 5 節點 pipeline
+│   │   ├── agentic_agent/          #   多步驟迭代檢索
+│   │   └── multimodal_agent/       #   Stub（未來擴充）
+│   ├── orchestrator/               # 編排層（LangGraph StateGraph）
+│   │   ├── state.py                #   OrchestratorState
+│   │   ├── nodes.py                #   router / agent wrapper 節點
+│   │   └── graph.py                #   StateGraph 組裝 + 入口函式
+│   └── evaluation/                 # 評估系統
+│       ├── schemas.py              #   SourceMetrics, QuestionDetail
+│       ├── metrics.py              #   Hit Rate, MRR, MAP
+│       ├── evaluator.py            #   AgentEvaluator + OrchestratorEvaluator
+│       └── cli.py                  #   CLI 入口（bears-eval）
+├── scripts/                        # 工具腳本
+│   └── build_db.py                 #   建立向量 + 圖譜資料庫
+├── experiments/                    # 實驗參數 YAML（進 git）
 │   └── default.yaml
-├── data/                       # 評估資料
-│   └── queries.json
-├── archive/                    # 原始實作（僅供參考，不修改）
+├── data/                           # 資料
+│   ├── corpus.json                 #   ~4200 篇文件（drcd / hotpotqa / 2wiki）
+│   ├── queries.json                #   ~647 題評估問題
+│   └── chroma_db_corpus/           #   ChromaDB 持久化資料
+├── output/                         # 評估結果輸出（不進 git）
 ├── pyproject.toml
 └── .env.example
 ```
@@ -99,98 +102,77 @@ OPENAI_API_KEY=sk-...
 NEO4J_URI=neo4j+s://xxx.databases.neo4j.io
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=your_password
-
-# 選填（不設定則不啟用追蹤）
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_HOST=https://us.cloud.langfuse.com
 ```
 
-### 3. 驗證安裝
+### 3. 建立資料庫
 
 ```bash
-# 確認設定可載入
-uv run python -c "from bears.core.config import Settings; print('OK')"
+# 建立向量 + 圖譜資料庫
+uv run python scripts/build_db.py
 
-# 確認實驗參數可載入
-uv run python -c "from bears.core.experiment import ExperimentConfig; print(ExperimentConfig.from_yaml('experiments/default.yaml'))"
+# 只建向量（ChromaDB）
+uv run python scripts/build_db.py --vector-only
 
-# 確認所有 Agent 可載入
-uv run python -c "
-from bears.agents.registry import AGENT_REGISTRY
-print('Registered agents:', list(AGENT_REGISTRY.keys()))
-"
+# 只建圖譜（Neo4j）
+uv run python scripts/build_db.py --graph-only
+
+# 限制文件數量（快速測試）
+uv run python scripts/build_db.py --limit 100
 ```
 
 ## 使用方式
 
-### 以 Python 呼叫單一 Agent
-
-```python
-import asyncio
-from bears.agents.registry import get_agent
-from bears.core.experiment import ExperimentConfig
-
-# 載入實驗參數（或使用預設值）
-exp = ExperimentConfig.from_yaml("experiments/default.yaml")
-
-# 選擇 Agent：hybrid / kg / agentic
-agent = get_agent("hybrid", experiment=exp)
-
-# 執行
-result = asyncio.run(agent.run("台灣第一座國家公園是哪座？"))
-
-print(result.answer)
-print(result.retrieved_doc_ids)
-print(result.confidence)
-```
-
-### 以 Python 呼叫 Orchestrator（Router → Agent → Merge）
-
-```python
-import asyncio
-from bears.orchestrator.graph import run_orchestrated_rag
-
-result = asyncio.run(run_orchestrated_rag("美國銷售額第二大汽車租賃公司的執行長是誰？"))
-
-print(result["answer"])
-print(result["retrieved_doc_ids"])
-```
-
-### 以 CLI 評估 Agent
+### CLI 評估（主要流程）
 
 ```bash
-# 評估 hybrid agent（使用預設參數）
+# 評估單一 agent
 uv run bears-eval --agent hybrid
+uv run bears-eval --agent kg
+uv run bears-eval --agent agentic
 
-# 評估 kg agent，指定實驗參數檔
-uv run bears-eval --agent kg --config experiments/default.yaml
+# 指定實驗參數
+uv run bears-eval --agent hybrid --config experiments/default.yaml
 
-# 評估 agentic agent，限制 10 題（快速測試）
-uv run bears-eval --agent agentic --limit 10
+# 限制題數（快速測試）
+uv run bears-eval --agent hybrid --limit 10
 
-# 評估 orchestrator 端到端
+# 分開存檔
+uv run bears-eval --agent hybrid --output output/hybrid.json
+uv run bears-eval --agent kg --output output/kg.json
+uv run bears-eval --agent agentic --output output/agentic.json
+
+# 詳細逐題結果
+uv run bears-eval --agent hybrid --detailed
+
+# 只看失敗的題目
+uv run bears-eval --agent hybrid --detailed --failures-only
+
+# 評估 orchestrator（Router → Agent）端到端
 uv run bears-eval --orchestrator
-
-# 指定自訂 queries 檔案
-uv run bears-eval --agent hybrid --queries data/queries.json
-
-# 輸出結果到檔案
-uv run bears-eval --agent hybrid > results/hybrid_eval.json
 ```
 
-CLI 也可用 `python -m` 方式呼叫：
+#### CLI 參數一覽
 
-```bash
-uv run python -m bears.evaluation.cli --agent hybrid --config experiments/default.yaml
-```
+| 參數 | 說明 | 預設值 |
+|------|------|--------|
+| `--agent NAME` | 評估指定 agent（hybrid / kg / agentic） | — |
+| `--orchestrator` | 評估完整 orchestrator pipeline | — |
+| `--config PATH` | 實驗參數 YAML | None（使用預設值） |
+| `--queries PATH` | 題目 JSON 檔 | `data/queries.json` |
+| `--limit N` | 限制評估題數 | 全部 |
+| `--output PATH` | 輸出檔案路徑 | `output/results.json` |
+| `--detailed` | 輸出逐題詳細結果 | False |
+| `--failures-only` | 搭配 `--detailed`，只輸出判定失敗的題目 | False |
 
 #### 評估輸出格式
 
 ```json
 {
   "overall": {
-    "total_questions": 100,
+    "total_questions": 647,
     "hit_rate": 0.85,
     "partial_hit_rate": 0.72,
     "mrr": 0.68,
@@ -209,6 +191,35 @@ uv run python -m bears.evaluation.cli --agent hybrid --config experiments/defaul
   }
 }
 ```
+
+### Python API
+
+```python
+import asyncio
+from bears.agents.registry import get_agent
+from bears.core.experiment import ExperimentConfig
+
+# 單一 Agent
+exp = ExperimentConfig.from_yaml("experiments/default.yaml")
+agent = get_agent("hybrid", experiment=exp)
+result = asyncio.run(agent.run("台灣第一座國家公園是哪座？"))
+print(result.answer)
+print(result.retrieved_doc_ids)
+
+# Orchestrator（Router → Agent）
+from bears.orchestrator.graph import run_orchestrated_rag
+result = asyncio.run(run_orchestrated_rag("美國銷售額第二大汽車租賃公司的執行長是誰？"))
+print(result["answer"])
+```
+
+## 可用 Agent
+
+| 名稱 | 策略 | 來源 |
+|------|------|------|
+| `hybrid` | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成 | `archive/hybrid_rag/` |
+| `kg` | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） | `archive/GraphRag_hybrid_1/` |
+| `agentic` | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成 | `archive/AgenticFlow/` |
+| `multimodal` | Stub（未實作） | — |
 
 ## 設定系統
 
@@ -235,22 +246,12 @@ agent: "hybrid"
 uv run bears-eval --agent hybrid --config experiments/exp_topk10.yaml
 ```
 
-## 可用 Agent
-
-| 名稱 | 說明 | 來源 |
-|------|------|------|
-| `hybrid` | 向量搜尋 + 多查詢擴展 + RRF 融合 | `archive/hybrid_rag/` |
-| `kg` | 知識圖譜 5 節點 pipeline（查詢擴展→向量+圖譜擴展→LLM 重排序→圖譜檢索→生成） | `archive/GraphRag_hybrid_1/` |
-| `agentic` | 多步驟迭代：逐步檢索→LLM 重排序→推理下一步→距離+LLM 評分融合→生成 | `archive/AgenticFlow/` |
-| `multimodal` | Stub（未實作，confidence 固定 0.0） | — |
-
 ## 開發指南
 
 ### 新增一個 Agent
 
-1. 建立目錄 `src/bears/agents/your_agent/`
-2. 建立 `__init__.py` 和 `agent.py`
-3. 繼承 `BaseRAGAgent`，實作 `name`、`capabilities`、`run()` 三個介面：
+1. 建立 `src/bears/agents/your_agent/agent.py`
+2. 繼承 `BaseRAGAgent`，實作 `name`、`capabilities`、`run()`：
 
 ```python
 from bears.agents.base import BaseRAGAgent, AgentCapability, AgentResponse
@@ -270,15 +271,10 @@ class YourAgent(BaseRAGAgent):
 
     async def run(self, question, experiment=None) -> AgentResponse:
         # 你的 retrieval + generation 邏輯
-        return AgentResponse(
-            answer="...",
-            retrieved_doc_ids=["doc_1", "doc_2"],
-            context=["..."],
-            confidence=0.8,
-        )
+        return AgentResponse(answer="...", retrieved_doc_ids=["doc_1"], confidence=0.8)
 ```
 
-4. 在 `src/bears/agents/registry.py` 註冊：
+3. 在 `src/bears/agents/registry.py` 註冊：
 
 ```python
 AGENT_REGISTRY["your_agent"] = {
@@ -288,33 +284,16 @@ AGENT_REGISTRY["your_agent"] = {
 }
 ```
 
-5. 測試：
-
-```bash
-uv run bears-eval --agent your_agent --limit 5
-```
-
-### 使用共用資料庫模組
-
-Agent 內部可直接 import 共用的資料庫模組：
-
-```python
-from bears.database.vector.vector_store import VectorStoreManager
-from bears.database.graph.graph_store import GraphStoreManager
-
-vector_store = VectorStoreManager()
-docs = vector_store.search("查詢文字", k=5)
-
-graph_store = GraphStoreManager()
-relations = graph_store.query_entity("實體名稱", limit=10)
-```
+4. 測試：`uv run bears-eval --agent your_agent --limit 5`
 
 ## Tech Stack
 
-- **LLM**: OpenAI GPT-4o-mini（可在 YAML 設定切換）
-- **向量資料庫**: ChromaDB
-- **圖譜資料庫**: Neo4j
-- **編排框架**: LangGraph (StateGraph)
-- **LLM 框架**: LangChain
-- **Observability**: Langfuse（選填）
-- **套件管理**: uv + pyproject.toml (hatchling)
+| 類別 | 技術 |
+|------|------|
+| LLM | OpenAI GPT-4o-mini（可在 YAML 切換） |
+| 向量資料庫 | ChromaDB + OpenAI text-embedding-3-small |
+| 圖譜資料庫 | Neo4j |
+| 編排框架 | LangGraph (StateGraph) |
+| LLM 框架 | LangChain |
+| Observability | Langfuse（選填） |
+| 套件管理 | uv + pyproject.toml (hatchling) |
