@@ -27,6 +27,8 @@ class AgentResponse(BaseModel):
     retrieved_doc_ids: List[str] = []
     context: List[str] = []
     confidence: float = 0.0
+    retrieval_time: float = 0.0
+    generation_time: float = 0.0
     metadata: Dict[str, Any] = {}
 
 

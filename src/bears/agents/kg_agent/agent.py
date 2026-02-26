@@ -9,6 +9,7 @@ Wraps the 5-node pipeline logic into a BaseRAGAgent:
 
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Set
 
 from langchain_openai import ChatOpenAI
@@ -357,20 +358,18 @@ B國政府所在地
         exp = experiment or self.exp
 
         try:
-            # Node 1: Query expansion
+            # --- Retrieval phase (Nodes 1-4) ---
+            retrieval_start = time.time()
             expanded = self._query_expansion(question)
-
-            # Node 2: Vector retrieval + graph expansion
             candidates = self._retrieve_vector_with_graph_expansion(expanded)
-
-            # Node 3: Rerank
             vector_context, retrieved_ids = self._rerank(question, candidates)
-
-            # Node 4: Graph retrieval
             graph_context = self._retrieve_graph(question)
+            retrieval_time = time.time() - retrieval_start
 
-            # Node 5: Generate answer
+            # --- Generation phase (Node 5) ---
+            generation_start = time.time()
             answer = self._generate_answer(question, vector_context, graph_context)
+            generation_time = time.time() - generation_start
 
             confidence = min(1.0, len(retrieved_ids) / max(exp.top_k, 1))
 
@@ -379,6 +378,8 @@ B國政府所在地
                 retrieved_doc_ids=retrieved_ids,
                 context=vector_context + graph_context,
                 confidence=confidence,
+                retrieval_time=retrieval_time,
+                generation_time=generation_time,
                 metadata={
                     "agent": "kg",
                     "num_candidates": len(candidates),

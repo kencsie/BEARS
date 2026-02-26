@@ -7,6 +7,7 @@ Multi-step iterative retrieval with LLM reranking, grading, and reasoning.
 
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -227,8 +228,8 @@ class AgenticAgent(BaseRAGAgent):
         rerank_alpha: float = None,
         rerank_beta: float = None,
         context_top_m: int = 3,
-    ) -> Tuple[List[Dict[str, Any]], str, List[str]]:
-        """Run multi-step retrieval and return (final_docs, answer, all_doc_ids)."""
+    ) -> Tuple[List[Dict[str, Any]], str, List[str], float]:
+        """Run multi-step retrieval and return (final_docs, answer, all_doc_ids, generation_time)."""
         rerank_alpha = rerank_alpha if rerank_alpha is not None else self.exp.rerank_alpha
         rerank_beta = rerank_beta if rerank_beta is not None else self.exp.rerank_beta
         if candidate_k is None:
@@ -288,7 +289,7 @@ class AgenticAgent(BaseRAGAgent):
         final_candidates = ranked_by_dist[:min(candidate_k, len(ranked_by_dist))]
 
         if not final_candidates:
-            return [], "資料不足以回答。", list(set(all_doc_ids))
+            return [], "資料不足以回答。", list(set(all_doc_ids)), 0.0
 
         dists = [float(p["best_score"]) for _, p in final_candidates]
         d_min, d_max = min(dists), max(dists)
@@ -325,8 +326,10 @@ class AgenticAgent(BaseRAGAgent):
             })
             final_doc_ids.append(doc_id)
 
+        gen_start = time.time()
         answer = self._generate_answer(question, final_docs)
-        return final_docs, answer, final_doc_ids
+        generation_time = time.time() - gen_start
+        return final_docs, answer, final_doc_ids, generation_time
 
     # ---- Main entry point ----
 
@@ -334,7 +337,8 @@ class AgenticAgent(BaseRAGAgent):
         exp = experiment or self.exp
 
         try:
-            final_docs, answer, doc_ids = self._run_agent_retrieval(
+            run_start = time.time()
+            final_docs, answer, doc_ids, generation_time = self._run_agent_retrieval(
                 question,
                 max_steps=4,
                 per_step_top_k=exp.top_k,
@@ -343,6 +347,8 @@ class AgenticAgent(BaseRAGAgent):
                 rerank_alpha=exp.rerank_alpha,
                 rerank_beta=exp.rerank_beta,
             )
+            total_run_time = time.time() - run_start
+            retrieval_time = total_run_time - generation_time
 
             contexts = [d.get("content_preview", "") for d in final_docs]
             confidence = min(1.0, len(doc_ids) / max(exp.top_k, 1)) if doc_ids else 0.0
@@ -352,6 +358,8 @@ class AgenticAgent(BaseRAGAgent):
                 retrieved_doc_ids=doc_ids,
                 context=contexts,
                 confidence=confidence,
+                retrieval_time=retrieval_time,
+                generation_time=generation_time,
                 metadata={
                     "agent": "agentic",
                     "num_final_docs": len(final_docs),

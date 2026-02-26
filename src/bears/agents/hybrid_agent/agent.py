@@ -7,6 +7,7 @@ with RRF fusion logic and LLM generation.
 
 import logging
 import re
+import time
 from typing import Dict, List, Optional, Set
 
 from langchain_openai import ChatOpenAI
@@ -165,21 +166,20 @@ class HybridRAGAgent(BaseRAGAgent):
         top_k = exp.top_k
 
         try:
-            # Multi-query vector search
+            # --- Retrieval phase ---
+            retrieval_start = time.time()
             results = self._multi_query_search(question, k=top_k * 4)
-
-            # RRF fusion (single list here, but extensible for keyword search)
             fused = self._rrf_fusion([results])
             top_results = fused[:top_k]
-
-            # Extract doc IDs and contexts
             doc_ids = [r["doc_id"] for r in top_results if r.get("doc_id")]
             contexts = [r["content"] for r in top_results]
+            retrieval_time = time.time() - retrieval_start
 
-            # Generate answer
+            # --- Generation phase ---
+            generation_start = time.time()
             answer = self._generate_answer(question, top_results)
+            generation_time = time.time() - generation_start
 
-            # Confidence heuristic: based on number of results found
             confidence = min(1.0, len(doc_ids) / max(top_k, 1))
 
             return AgentResponse(
@@ -187,6 +187,8 @@ class HybridRAGAgent(BaseRAGAgent):
                 retrieved_doc_ids=doc_ids,
                 context=contexts,
                 confidence=confidence,
+                retrieval_time=retrieval_time,
+                generation_time=generation_time,
                 metadata={"agent": "hybrid", "num_candidates": len(results)},
             )
         except Exception as e:

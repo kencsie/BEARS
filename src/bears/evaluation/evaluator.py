@@ -136,6 +136,8 @@ Answer "Pass" or "Fail"."""),
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
                     stats["generation_pass"] += (1 if is_pass else 0)
+                    stats["retrieval_time_sum"] += result.retrieval_time
+                    stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
@@ -183,6 +185,8 @@ Answer "Pass" or "Fail"."""),
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
                     stats["generation_pass"] += (1 if is_pass else 0)
+                    stats["retrieval_time_sum"] += result.retrieval_time
+                    stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
 
                 question_details.append({
@@ -198,6 +202,8 @@ Answer "Pass" or "Fail"."""),
                     "ap": retrieval_metrics["ap"],
                     "judge_pass": is_pass,
                     "source_dataset": source_dataset,
+                    "retrieval_time": result.retrieval_time,
+                    "generation_time": result.generation_time,
                     "total_time": total_time,
                 })
 
