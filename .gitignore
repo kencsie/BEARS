@@ -21,3 +21,6 @@ output/
 
 # Archive
 archive/
+
+# Neo4j
+Neo4j-*.txt

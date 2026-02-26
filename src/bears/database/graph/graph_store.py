@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 
 class Entity(BaseModel):
     """Entity model."""
+
     name: str = Field(description="Entity name")
     type: str = Field(description="Entity type (e.g. PERSON/ORGANIZATION/LOCATION)")
 
 
 class Relationship(BaseModel):
     """Relationship model."""
+
     source: str = Field(description="Source entity name")
     target: str = Field(description="Target entity name")
     type: str = Field(description="Relationship type")
@@ -30,21 +32,14 @@ class Relationship(BaseModel):
 class GraphStoreManager:
     """Neo4j graph store manager."""
 
-    def __init__(
-        self,
-        uri: str = None,
-        username: str = None,
-        password: str = None
-    ):
+    def __init__(self, uri: str = None, username: str = None, password: str = None):
         settings = get_settings()
         self.uri = uri or settings.NEO4J_URI
         self.username = username or settings.NEO4J_USERNAME
         self.password = password or settings.NEO4J_PASSWORD
 
         self.graph = Neo4jGraph(
-            url=self.uri,
-            username=self.username,
-            password=self.password
+            url=self.uri, username=self.username, password=self.password
         )
 
         logger.info("GraphStoreManager initialized")
@@ -59,11 +54,7 @@ class GraphStoreManager:
             """
             self.graph.query(
                 cypher_query,
-                {
-                    "name": entity.name,
-                    "type": entity.type,
-                    "doc_id": doc_id
-                }
+                {"name": entity.name, "type": entity.type, "doc_id": doc_id},
             )
             logger.debug(f"Added entity: {entity.name}")
         except Exception as e:
@@ -73,12 +64,12 @@ class GraphStoreManager:
     def add_relationship(self, relationship: Relationship, doc_id: str = None):
         """Add relationship to graph."""
         try:
-            rel_type = relationship.type.upper().replace(" ", "_")
+            rel_type = relationship.type.upper()
 
             cypher_query = f"""
             MERGE (source:Entity {{name: $source}})
             MERGE (target:Entity {{name: $target}})
-            MERGE (source)-[r:{rel_type}]->(target)
+            MERGE (source)-[r:`{rel_type}`]->(target)
             ON CREATE SET r.description = $description, r.doc_id = $doc_id
             """
 
@@ -88,10 +79,12 @@ class GraphStoreManager:
                     "source": relationship.source,
                     "target": relationship.target,
                     "description": relationship.description,
-                    "doc_id": doc_id
-                }
+                    "doc_id": doc_id,
+                },
             )
-            logger.debug(f"Added relationship: {relationship.source} -[{rel_type}]-> {relationship.target}")
+            logger.debug(
+                f"Added relationship: {relationship.source} -[{rel_type}]-> {relationship.target}"
+            )
         except Exception as e:
             logger.error(f"Failed to add relationship: {e}")
             raise
@@ -106,11 +99,7 @@ class GraphStoreManager:
             """
 
             results = self.graph.query(
-                cypher_query,
-                {
-                    "name": entity_name,
-                    "limit": limit
-                }
+                cypher_query, {"name": entity_name, "limit": limit}
             )
 
             return results
@@ -118,7 +107,9 @@ class GraphStoreManager:
             logger.error(f"Failed to query entity: {e}")
             return []
 
-    def query_cypher(self, cypher_query: str, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def query_cypher(
+        self, cypher_query: str, params: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
         """Execute custom Cypher query."""
         try:
             results = self.graph.query(cypher_query, params or {})
@@ -152,7 +143,7 @@ class GraphStoreManager:
             return {
                 "total_nodes": node_count,
                 "total_relationships": rel_count,
-                "database": "Neo4j"
+                "database": "Neo4j",
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
