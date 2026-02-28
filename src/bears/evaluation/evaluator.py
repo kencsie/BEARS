@@ -70,10 +70,11 @@ class AgentEvaluator:
         except json.JSONDecodeError as e:
             raise ValueError(f"queries.json format error: {e}")
 
-    async def _judge_answer(
-        self, question: str, gold_answer: str, model_answer: str
-    ) -> bool:
-        """LLM-as-a-Judge: check if model answer matches gold answer semantically."""
+    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> Optional[bool]:
+        """LLM-as-a-Judge: check if model answer matches gold answer semantically.
+
+        Returns True/False for pass/fail, or None if the judge itself crashes.
+        """
         try:
             judge_prompt = ChatPromptTemplate.from_messages(
                 [
@@ -110,7 +111,7 @@ Answer "Pass" or "Fail".""",
             return "pass" in result.content.lower()
         except Exception as e:
             logger.error(f"LLM-as-Judge error: {e}")
-            return False
+            return None
 
     async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
         """Run evaluation on all queries and return aggregated metrics."""
@@ -124,13 +125,18 @@ Answer "Pass" or "Fail".""",
 
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
+        skipped = 0
 
         for idx, query in tqdm(
             enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"
         ):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = set(query.get("gold_doc_ids", []))
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
@@ -165,8 +171,12 @@ Answer "Pass" or "Fail".""",
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
-                logger.error(f"Evaluation error: {e}")
+                logger.error(f"Evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         return compute_final_metrics(stats_by_source, stats_by_type)
 
@@ -181,14 +191,18 @@ Answer "Pass" or "Fail".""",
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
         question_details = []
+        skipped = 0
 
         for idx, query in tqdm(
             enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"
         ):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = query.get("gold_doc_ids", [])
-            gold_doc_ids_set = set(gold_doc_ids)
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
@@ -214,7 +228,7 @@ Answer "Pass" or "Fail".""",
                     stats["total"] += 1
                     stats["hit_count"] += retrieval_metrics["hit"]
                     stats["found_sum"] += retrieval_metrics["found_count"]
-                    stats["gold_sum"] += len(gold_doc_ids_set)
+                    stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
                     stats["generation_pass"] += 1 if is_pass else 0
@@ -247,8 +261,12 @@ Answer "Pass" or "Fail".""",
                     progress_callback(idx, total_queries)
 
             except Exception as e:
-                logger.error(f"Evaluation error: {e}")
+                logger.error(f"Evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         final = compute_final_metrics(stats_by_source, stats_by_type)
 
@@ -303,8 +321,9 @@ class OrchestratorEvaluator:
                 }
             )
             return "pass" in result.content.lower()
-        except Exception:
-            return False
+        except Exception as e:
+            logger.error(f"LLM-as-Judge error: {e}")
+            return None
 
     async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
         """Evaluate orchestrator end-to-end."""
@@ -316,13 +335,19 @@ class OrchestratorEvaluator:
 
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
+        skipped = 0
+        total_queries = len(queries_to_eval)
 
         for idx, query in tqdm(
             enumerate(queries_to_eval, 1), total=len(queries_to_eval), desc="Evaluating"
         ):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = set(query.get("gold_doc_ids", []))
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
@@ -351,7 +376,11 @@ class OrchestratorEvaluator:
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
-                logger.error(f"Orchestrator evaluation error: {e}")
+                logger.error(f"Orchestrator evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         return compute_final_metrics(stats_by_source, stats_by_type)
