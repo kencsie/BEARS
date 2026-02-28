@@ -111,6 +111,7 @@ Answer "Pass" or "Fail"."""),
 
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
+        skipped = 0
 
         for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
@@ -152,8 +153,12 @@ Answer "Pass" or "Fail"."""),
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
-                logger.error(f"Evaluation error: {e}")
+                logger.error(f"Evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         return compute_final_metrics(stats_by_source, stats_by_type)
 
@@ -166,6 +171,7 @@ Answer "Pass" or "Fail"."""),
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
         question_details = []
+        skipped = 0
 
         for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
@@ -226,8 +232,12 @@ Answer "Pass" or "Fail"."""),
                 })
 
             except Exception as e:
-                logger.error(f"Evaluation error: {e}")
+                logger.error(f"Evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         final = compute_final_metrics(stats_by_source, stats_by_type)
 
@@ -279,8 +289,10 @@ class OrchestratorEvaluator:
 
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
+        skipped = 0
+        total_queries = len(queries_to_eval)
 
-        for idx, query in tqdm(enumerate(queries_to_eval, 1), total=len(queries_to_eval), desc="Evaluating"):
+        for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
             raw_gold = query.get("gold_doc_ids", [])
@@ -314,7 +326,11 @@ class OrchestratorEvaluator:
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
-                logger.error(f"Orchestrator evaluation error: {e}")
+                logger.error(f"Orchestrator evaluation error on question {idx}: {e}")
+                skipped += 1
                 continue
+
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped}/{total_queries} questions due to errors")
 
         return compute_final_metrics(stats_by_source, stats_by_type)
