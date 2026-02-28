@@ -6,7 +6,7 @@ Only evaluation-related schemas are kept (no API schemas).
 """
 
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import Dict, List, Optional
 
 
 class SourceMetrics(BaseModel):
@@ -34,7 +34,7 @@ class QuestionDetail(BaseModel):
     found_count: int
     mrr: float
     ap: float
-    judge_pass: bool
+    judge_pass: Optional[bool]
     source_dataset: str
     question_type: str = "unknown"
     retrieval_time: float = 0.0

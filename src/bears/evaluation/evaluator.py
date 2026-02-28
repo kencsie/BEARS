@@ -68,8 +68,11 @@ class AgentEvaluator:
         except json.JSONDecodeError as e:
             raise ValueError(f"queries.json format error: {e}")
 
-    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> bool:
-        """LLM-as-a-Judge: check if model answer matches gold answer semantically."""
+    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> Optional[bool]:
+        """LLM-as-a-Judge: check if model answer matches gold answer semantically.
+
+        Returns True/False for pass/fail, or None if the judge itself crashes.
+        """
         try:
             judge_prompt = ChatPromptTemplate.from_messages([
                 ("system", """You are a fair judge. Determine if the model answer is semantically consistent with the gold answer.
@@ -96,7 +99,7 @@ Answer "Pass" or "Fail"."""),
             return "pass" in result.content.lower()
         except Exception as e:
             logger.error(f"LLM-as-Judge error: {e}")
-            return False
+            return None
 
     async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
         """Run evaluation on all queries and return aggregated metrics."""
@@ -129,6 +132,9 @@ Answer "Pass" or "Fail"."""),
                 retrieval_metrics = calculate_retrieval_metrics(retrieved_doc_ids, gold_doc_ids)
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
 
+                if is_pass is None:
+                    logger.warning(f"Judge failed for question {idx}, not counted in generation_pass")
+
                 for stats in [stats_by_source[source_dataset], stats_by_type[question_type]]:
                     stats["total"] += 1
                     stats["hit_count"] += retrieval_metrics["hit"]
@@ -136,7 +142,7 @@ Answer "Pass" or "Fail"."""),
                     stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += (1 if is_pass else 0)
+                    stats["generation_pass"] += (1 if is_pass is True else 0)
                     stats["retrieval_time_sum"] += result.retrieval_time
                     stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
@@ -178,6 +184,9 @@ Answer "Pass" or "Fail"."""),
                 retrieval_metrics = calculate_retrieval_metrics(retrieved_doc_ids, gold_doc_ids_set)
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
 
+                if is_pass is None:
+                    logger.warning(f"Judge failed for question {idx}, not counted in generation_pass")
+
                 for stats in [stats_by_source[source_dataset], stats_by_type[question_type]]:
                     stats["total"] += 1
                     stats["hit_count"] += retrieval_metrics["hit"]
@@ -185,7 +194,7 @@ Answer "Pass" or "Fail"."""),
                     stats["gold_sum"] += len(gold_doc_ids_set)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += (1 if is_pass else 0)
+                    stats["generation_pass"] += (1 if is_pass is True else 0)
                     stats["retrieval_time_sum"] += result.retrieval_time
                     stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
@@ -235,7 +244,7 @@ class OrchestratorEvaluator:
             openai_api_key=settings.OPENAI_API_KEY,
         )
 
-    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> bool:
+    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> Optional[bool]:
         try:
             judge_prompt = ChatPromptTemplate.from_messages([
                 ("system", "You are a fair judge. Determine if the model answer matches the gold answer. "
@@ -249,8 +258,9 @@ class OrchestratorEvaluator:
                 "model_answer": model_answer,
             })
             return "pass" in result.content.lower()
-        except Exception:
-            return False
+        except Exception as e:
+            logger.error(f"LLM-as-Judge error: {e}")
+            return None
 
     async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
         """Evaluate orchestrator end-to-end."""
@@ -279,6 +289,9 @@ class OrchestratorEvaluator:
                 retrieval_metrics = calculate_retrieval_metrics(retrieved_doc_ids, gold_doc_ids)
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
 
+                if is_pass is None:
+                    logger.warning(f"Judge failed for question {idx}, not counted in generation_pass")
+
                 for stats in [stats_by_source[source_dataset], stats_by_type[question_type]]:
                     stats["total"] += 1
                     stats["hit_count"] += retrieval_metrics["hit"]
@@ -286,7 +299,7 @@ class OrchestratorEvaluator:
                     stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += (1 if is_pass else 0)
+                    stats["generation_pass"] += (1 if is_pass is True else 0)
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
