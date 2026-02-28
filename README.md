@@ -145,7 +145,6 @@ uv sync
 
 ![安裝 APOC 插件](docs/images/neo4j/安裝APOC插件.png)
 
-
 ### 3. 設定 Langfuse（LLM 追蹤）
 
 前往 [us.cloud.langfuse.com](https://us.cloud.langfuse.com) 註冊並登入。
@@ -245,16 +244,16 @@ uv run bears-eval --orchestrator
 
 #### CLI 參數一覽
 
-| 參數 | 說明 | 預設值 |
-|------|------|--------|
-| `--agent NAME` | 評估指定 agent（hybrid / kg / agentic） | — |
-| `--orchestrator` | 評估完整 orchestrator pipeline | — |
-| `--config PATH` | 實驗參數 YAML | None（使用預設值） |
-| `--queries PATH` | 題目 JSON 檔 | `data/queries.json` |
-| `--limit N` | 限制評估題數 | 全部 |
-| `--output PATH` | 輸出檔案路徑 | `output/results.json` |
-| `--detailed` | 輸出逐題詳細結果 | False |
-| `--failures-only` | 搭配 `--detailed`，只輸出判定失敗的題目 | False |
+| 參數                | 說明                                      | 預設值                  |
+| ------------------- | ----------------------------------------- | ----------------------- |
+| `--agent NAME`    | 評估指定 agent（hybrid / kg / agentic）   | —                      |
+| `--orchestrator`  | 評估完整 orchestrator pipeline            | —                      |
+| `--config PATH`   | 實驗參數 YAML                             | None（使用預設值）      |
+| `--queries PATH`  | 題目 JSON 檔                              | `data/queries.json`   |
+| `--limit N`       | 限制評估題數                              | 全部                    |
+| `--output PATH`   | 輸出檔案路徑                              | `output/results.json` |
+| `--detailed`      | 輸出逐題詳細結果                          | False                   |
+| `--failures-only` | 搭配 `--detailed`，只輸出判定失敗的題目 | False                   |
 
 #### 評估輸出格式
 
@@ -303,21 +302,21 @@ print(result["answer"])
 
 ## 可用 Agent
 
-| 名稱 | 策略 |
-|------|------|
-| `hybrid` | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成 |
-| `kg` | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） |
-| `agentic` | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成 |
-| `multimodal` | Stub（未實作） |
+| 名稱           | 策略                                                                               |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `hybrid`     | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成                                     |
+| `kg`         | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） |
+| `agentic`    | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成       |
+| `multimodal` | Stub（未實作）                                                                     |
 
 ## 設定系統
 
 BEARS 採用**雙層設定分離**設計：
 
-| 層級 | 內容 | 存放方式 | 進 Git？ |
-|------|------|----------|----------|
-| **系統設定** | API Keys、DB 連線、Langfuse | `.env` (Pydantic Settings) | 否 |
-| **實驗參數** | model、top_k、rerank alpha/beta | `experiments/*.yaml` (Pydantic BaseModel) | 是 |
+| 層級               | 內容                            | 存放方式                                    | 進 Git？ |
+| ------------------ | ------------------------------- | ------------------------------------------- | -------- |
+| **系統設定** | API Keys、DB 連線、Langfuse     | `.env` (Pydantic Settings)                | 否       |
+| **實驗參數** | model、top_k、rerank alpha/beta | `experiments/*.yaml` (Pydantic BaseModel) | 是       |
 
 ### 建立新實驗
 
@@ -377,17 +376,17 @@ AGENT_REGISTRY["your_agent"] = {
 
 ## Tech Stack
 
-| 類別 | 技術 |
-|------|------|
-| LLM | OpenAI GPT-4o-mini（可在 YAML 切換） |
-| 向量資料庫 | ChromaDB + OpenAI text-embedding-3-small |
-| 圖譜資料庫 | Neo4j |
-| 編排框架 | LangGraph (StateGraph) |
-| LLM 框架 | LangChain |
-| Web API | FastAPI |
-| 前端 | React 19 + Vite + Recharts |
-| Observability | Langfuse（選填） |
-| 套件管理 | uv + pyproject.toml (hatchling) |
+| 類別          | 技術                                     |
+| ------------- | ---------------------------------------- |
+| LLM           | OpenAI GPT-4o-mini（可在 YAML 切換）     |
+| 向量資料庫    | ChromaDB + OpenAI text-embedding-3-small |
+| 圖譜資料庫    | Neo4j                                    |
+| 編排框架      | LangGraph (StateGraph)                   |
+| LLM 框架      | LangChain                                |
+| Web API       | FastAPI                                  |
+| 前端          | React 19 + Vite + Recharts               |
+| Observability | Langfuse（選填）                         |
+| 套件管理      | uv + pyproject.toml (hatchling)          |
 
 ## Web API
 
@@ -396,40 +395,40 @@ AGENT_REGISTRY["your_agent"] = {
 ### 啟動 API Server
 
 ```bash
-uv run uvicorn bears.api.api:app --reload --port 8000
+uv run uvicorn bears.api.api:app --reload --port 8005
 ```
 
-Swagger UI：`http://localhost:8000/docs`
+Swagger UI：`http://127.0.0.1:8005/docs`
 
 ### API Endpoints
 
 #### 評估 (`/api/eval/`)
 
-| Endpoint | 方法 | 說明 |
-|----------|------|------|
-| `/api/eval/start` | POST | 啟動評估任務（回傳 task_id） |
-| `/api/eval/status/{task_id}` | GET | 查詢評估進度（即時更新） |
-| `/api/eval/results/{task_id}` | GET | 取得評估結果 |
-| `/api/eval/history` | GET | 列出歷史評估檔案 |
-| `/api/eval/history/{filename}` | GET | 讀取特定歷史結果 |
-| `/api/eval/agents` | GET | 列出可用 agents |
-| `/api/eval/queries/stats` | GET | 題目統計 |
+| Endpoint                         | 方法 | 說明                         |
+| -------------------------------- | ---- | ---------------------------- |
+| `/api/eval/start`              | POST | 啟動評估任務（回傳 task_id） |
+| `/api/eval/status/{task_id}`   | GET  | 查詢評估進度（即時更新）     |
+| `/api/eval/results/{task_id}`  | GET  | 取得評估結果                 |
+| `/api/eval/history`            | GET  | 列出歷史評估檔案             |
+| `/api/eval/history/{filename}` | GET  | 讀取特定歷史結果             |
+| `/api/eval/agents`             | GET  | 列出可用 agents              |
+| `/api/eval/queries/stats`      | GET  | 題目統計                     |
 
 #### 文件查詢 (`/api/docs/`)
 
-| Endpoint | 方法 | 說明 |
-|----------|------|------|
-| `/api/docs/{doc_id}` | GET | 根據 doc_id 查詢 ChromaDB 文件內容 |
+| Endpoint               | 方法 | 說明                               |
+| ---------------------- | ---- | ---------------------------------- |
+| `/api/docs/{doc_id}` | GET  | 根據 doc_id 查詢 ChromaDB 文件內容 |
 
 #### 實驗參數 (`/api/experiments/`)
 
-| Endpoint | 方法 | 說明 |
-|----------|------|------|
-| `/api/experiments` | GET | 列出所有實驗參數 |
-| `/api/experiments` | POST | 建立新實驗參數 |
-| `/api/experiments/{name}` | GET | 讀取特定實驗參數 |
-| `/api/experiments/{name}` | PUT | 更新實驗參數 |
-| `/api/experiments/{name}` | DELETE | 刪除實驗參數 |
+| Endpoint                    | 方法   | 說明             |
+| --------------------------- | ------ | ---------------- |
+| `/api/experiments`        | GET    | 列出所有實驗參數 |
+| `/api/experiments`        | POST   | 建立新實驗參數   |
+| `/api/experiments/{name}` | GET    | 讀取特定實驗參數 |
+| `/api/experiments/{name}` | PUT    | 更新實驗參數     |
+| `/api/experiments/{name}` | DELETE | 刪除實驗參數     |
 
 ## Frontend Dashboard
 
@@ -443,15 +442,15 @@ npm install          # 首次安裝依賴
 npm run dev          # 啟動開發伺服器（http://localhost:5173）
 ```
 
-> 前端 Vite dev server 已設定 proxy，會自動將 `/api` 請求轉發到 `http://localhost:8000`。
+> 前端 Vite dev server 已設定 proxy，會自動將 `/api` 請求轉發到 `http://localhost:8005`。
 
 ### 功能頁面
 
-| 頁面 | 說明 |
-|------|------|
-| **Dashboard** | 題目統計、Agent 總覽、啟動評估（含即時進度條）、查看結果 |
-| **History** | 瀏覽歷史評估結果檔案，點擊查看詳情 |
-| **EvalResult** | 圖表 + 表格呈現 Overall / By Source / By Type / Per-Question 指標 |
-| **Experiments** | 建立、編輯、刪除實驗參數 YAML |
+| 頁面                  | 說明                                                              |
+| --------------------- | ----------------------------------------------------------------- |
+| **Dashboard**   | 題目統計、Agent 總覽、啟動評估（含即時進度條）、查看結果          |
+| **History**     | 瀏覽歷史評估結果檔案，點擊查看詳情                                |
+| **EvalResult**  | 圖表 + 表格呈現 Overall / By Source / By Type / Per-Question 指標 |
+| **Experiments** | 建立、編輯、刪除實驗參數 YAML                                     |
 
 每題可點擊展開詳情（Question Detail Modal），顯示完整指標並支援 doc_id 展開查看 ChromaDB 原文。
