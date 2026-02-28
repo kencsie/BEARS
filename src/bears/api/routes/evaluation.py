@@ -83,9 +83,13 @@ async def _run_evaluation(
             evaluator = AgentEvaluator(agent, experiment)
             task["message"] = f"Running {agent_name} evaluation..."
 
+            def on_progress(current, total_q):
+                task["progress"] = current
+                task["message"] = f"Evaluating question {current}/{total_q}..."
+
             if detailed:
                 detailed_result = await evaluator.evaluate_detailed(
-                    queries_path, limit=limit
+                    queries_path, limit=limit, progress_callback=on_progress
                 )
                 results = detailed_result.model_dump()
 
