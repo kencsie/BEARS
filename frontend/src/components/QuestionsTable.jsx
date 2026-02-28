@@ -38,7 +38,7 @@ export default function QuestionsTable({ questions, onSelectQuestion, maxHeight 
                             </td>
                             <td>{q.hit ? '✅' : '❌'}</td>
                             <td className="metric-value">{q.mrr?.toFixed(2)}</td>
-                            <td>{q.judge_pass ? '✅' : '❌'}</td>
+                            <td>{q.judge_pass === null ? '⚠️' : q.judge_pass ? '✅' : '❌'}</td>
                             <td><span className="tag tag-blue">{q.source_dataset}</span></td>
                             {showType && <td><span className="tag tag-green">{q.question_type}</span></td>}
                             <td>{q.total_time?.toFixed(1)}s</td>

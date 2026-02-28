@@ -116,8 +116,8 @@ export default function QuestionDetailModal({ question, onClose }) {
                         <span className={`tag ${question.hit ? 'tag-green' : 'tag-orange'}`}>
                             Hit: {question.hit ? '✅ Yes' : '❌ No'}
                         </span>
-                        <span className={`tag ${question.judge_pass ? 'tag-green' : 'tag-orange'}`}>
-                            Judge: {question.judge_pass ? '✅ Pass' : '❌ Fail'}
+                        <span className={`tag ${question.judge_pass === null ? 'tag-purple' : question.judge_pass ? 'tag-green' : 'tag-orange'}`}>
+                            Judge: {question.judge_pass === null ? '⚠️ Error' : question.judge_pass ? '✅ Pass' : '❌ Fail'}
                         </span>
                         <span className="tag tag-blue">{question.source_dataset}</span>
                         <span className="tag tag-purple">{question.question_type}</span>

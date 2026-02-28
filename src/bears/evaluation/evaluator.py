@@ -70,7 +70,9 @@ class AgentEvaluator:
         except json.JSONDecodeError as e:
             raise ValueError(f"queries.json format error: {e}")
 
-    async def _judge_answer(self, question: str, gold_answer: str, model_answer: str) -> Optional[bool]:
+    async def _judge_answer(
+        self, question: str, gold_answer: str, model_answer: str
+    ) -> Optional[bool]:
         """LLM-as-a-Judge: check if model answer matches gold answer semantically.
 
         Returns True/False for pass/fail, or None if the judge itself crashes.
@@ -134,7 +136,9 @@ Answer "Pass" or "Fail".""",
             gold_answer = query.get("gold_answer")
             raw_gold = query.get("gold_doc_ids", [])
             if not isinstance(raw_gold, list):
-                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                logger.warning(
+                    f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}"
+                )
                 raw_gold = [raw_gold]
             gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
@@ -200,7 +204,9 @@ Answer "Pass" or "Fail".""",
             gold_answer = query.get("gold_answer")
             raw_gold = query.get("gold_doc_ids", [])
             if not isinstance(raw_gold, list):
-                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                logger.warning(
+                    f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}"
+                )
                 raw_gold = [raw_gold]
             gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
@@ -217,7 +223,7 @@ Answer "Pass" or "Fail".""",
                 model_answer = result.answer
 
                 retrieval_metrics = calculate_retrieval_metrics(
-                    retrieved_doc_ids, gold_doc_ids_set
+                    retrieved_doc_ids, gold_doc_ids
                 )
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
 
@@ -345,7 +351,9 @@ class OrchestratorEvaluator:
             gold_answer = query.get("gold_answer")
             raw_gold = query.get("gold_doc_ids", [])
             if not isinstance(raw_gold, list):
-                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                logger.warning(
+                    f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}"
+                )
                 raw_gold = [raw_gold]
             gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
