@@ -52,11 +52,23 @@ BEARS/
 │   │   ├── state.py                #   OrchestratorState
 │   │   ├── nodes.py                #   router / agent wrapper 節點
 │   │   └── graph.py                #   StateGraph 組裝 + 入口函式
+│   ├── api/                        # Web API（FastAPI）
+│   │   ├── api.py                  #   FastAPI 應用入口
+│   │   └── routes/                 #   API 路由模組
+│   │       ├── evaluation.py       #     評估相關 endpoints
+│   │       ├── documents.py        #     文件查詢 endpoint
+│   │       └── experiments.py      #     實驗參數 CRUD
 │   └── evaluation/                 # 評估系統
 │       ├── schemas.py              #   SourceMetrics, QuestionDetail
 │       ├── metrics.py              #   Hit Rate, MRR, MAP
 │       ├── evaluator.py            #   AgentEvaluator + OrchestratorEvaluator
 │       └── cli.py                  #   CLI 入口（bears-eval）
+├── frontend/                       # 前端 Dashboard（React + Vite）
+│   └── src/
+│       ├── components/             #   共用元件（Modal、Table）
+│       ├── pages/                  #   頁面（Dashboard、History、EvalResult、Experiments）
+│       ├── services/               #   API 封裝（axios）
+│       └── utils/                  #   工具函數
 ├── scripts/                        # 工具腳本
 │   └── build_db.py                 #   建立向量 + 圖譜資料庫
 ├── experiments/                    # 實驗參數 YAML（進 git）
@@ -372,5 +384,74 @@ AGENT_REGISTRY["your_agent"] = {
 | 圖譜資料庫 | Neo4j |
 | 編排框架 | LangGraph (StateGraph) |
 | LLM 框架 | LangChain |
+| Web API | FastAPI |
+| 前端 | React 19 + Vite + Recharts |
 | Observability | Langfuse（選填） |
 | 套件管理 | uv + pyproject.toml (hatchling) |
+
+## Web API
+
+除了 CLI 之外，BEARS 也提供 FastAPI Web API，支援前端 Dashboard 呼叫。
+
+### 啟動 API Server
+
+```bash
+uv run uvicorn bears.api.api:app --reload --port 8000
+```
+
+Swagger UI：`http://localhost:8000/docs`
+
+### API Endpoints
+
+#### 評估 (`/api/eval/`)
+
+| Endpoint | 方法 | 說明 |
+|----------|------|------|
+| `/api/eval/start` | POST | 啟動評估任務（回傳 task_id） |
+| `/api/eval/status/{task_id}` | GET | 查詢評估進度（即時更新） |
+| `/api/eval/results/{task_id}` | GET | 取得評估結果 |
+| `/api/eval/history` | GET | 列出歷史評估檔案 |
+| `/api/eval/history/{filename}` | GET | 讀取特定歷史結果 |
+| `/api/eval/agents` | GET | 列出可用 agents |
+| `/api/eval/queries/stats` | GET | 題目統計 |
+
+#### 文件查詢 (`/api/docs/`)
+
+| Endpoint | 方法 | 說明 |
+|----------|------|------|
+| `/api/docs/{doc_id}` | GET | 根據 doc_id 查詢 ChromaDB 文件內容 |
+
+#### 實驗參數 (`/api/experiments/`)
+
+| Endpoint | 方法 | 說明 |
+|----------|------|------|
+| `/api/experiments` | GET | 列出所有實驗參數 |
+| `/api/experiments` | POST | 建立新實驗參數 |
+| `/api/experiments/{name}` | GET | 讀取特定實驗參數 |
+| `/api/experiments/{name}` | PUT | 更新實驗參數 |
+| `/api/experiments/{name}` | DELETE | 刪除實驗參數 |
+
+## Frontend Dashboard
+
+React + Vite 建構的評估系統前端介面，詳細說明請參閱 [`frontend/README.md`](frontend/README.md)。
+
+### 啟動前端
+
+```bash
+cd frontend
+npm install          # 首次安裝依賴
+npm run dev          # 啟動開發伺服器（http://localhost:5173）
+```
+
+> 前端 Vite dev server 已設定 proxy，會自動將 `/api` 請求轉發到 `http://localhost:8000`。
+
+### 功能頁面
+
+| 頁面 | 說明 |
+|------|------|
+| **Dashboard** | 題目統計、Agent 總覽、啟動評估（含即時進度條）、查看結果 |
+| **History** | 瀏覽歷史評估結果檔案，點擊查看詳情 |
+| **EvalResult** | 圖表 + 表格呈現 Overall / By Source / By Type / Per-Question 指標 |
+| **Experiments** | 建立、編輯、刪除實驗參數 YAML |
+
+每題可點擊展開詳情（Question Detail Modal），顯示完整指標並支援 doc_id 展開查看 ChromaDB 原文。
