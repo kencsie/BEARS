@@ -115,7 +115,11 @@ Answer "Pass" or "Fail"."""),
         for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = set(query.get("gold_doc_ids", []))
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
@@ -166,8 +170,11 @@ Answer "Pass" or "Fail"."""),
         for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = query.get("gold_doc_ids", [])
-            gold_doc_ids_set = set(gold_doc_ids)
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
@@ -181,7 +188,7 @@ Answer "Pass" or "Fail"."""),
                 retrieved_doc_ids = result.retrieved_doc_ids
                 model_answer = result.answer
 
-                retrieval_metrics = calculate_retrieval_metrics(retrieved_doc_ids, gold_doc_ids_set)
+                retrieval_metrics = calculate_retrieval_metrics(retrieved_doc_ids, gold_doc_ids)
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
 
                 if is_pass is None:
@@ -191,7 +198,7 @@ Answer "Pass" or "Fail"."""),
                     stats["total"] += 1
                     stats["hit_count"] += retrieval_metrics["hit"]
                     stats["found_sum"] += retrieval_metrics["found_count"]
-                    stats["gold_sum"] += len(gold_doc_ids_set)
+                    stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
                     stats["generation_pass"] += (1 if is_pass is True else 0)
@@ -204,7 +211,7 @@ Answer "Pass" or "Fail"."""),
                     "question": question,
                     "gold_answer": gold_answer,
                     "model_answer": model_answer,
-                    "gold_doc_ids": gold_doc_ids,
+                    "gold_doc_ids": raw_gold,
                     "retrieved_doc_ids": retrieved_doc_ids,
                     "hit": bool(retrieval_metrics["hit"]),
                     "found_count": retrieval_metrics["found_count"],
@@ -276,7 +283,11 @@ class OrchestratorEvaluator:
         for idx, query in tqdm(enumerate(queries_to_eval, 1), total=len(queries_to_eval), desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
-            gold_doc_ids = set(query.get("gold_doc_ids", []))
+            raw_gold = query.get("gold_doc_ids", [])
+            if not isinstance(raw_gold, list):
+                logger.warning(f"Question {idx}: gold_doc_ids is not a list, wrapping: {raw_gold!r}")
+                raw_gold = [raw_gold]
+            gold_doc_ids = set(raw_gold)
             source_dataset = query.get("source_dataset", "unknown")
             question_type = query.get("question_type", "unknown")
 
