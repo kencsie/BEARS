@@ -70,7 +70,6 @@ def calculate_retrieval_metrics(
 def compute_final_metrics(
     stats_by_source: Dict[str, Dict],
     stats_by_type: Dict[str, Dict],
-    total_queries: int
 ) -> Dict[str, Any]:
     """Compute final aggregated metrics."""
     overall_stats = {
@@ -101,14 +100,14 @@ def compute_final_metrics(
     overall_metrics = _compute_metrics(overall_stats)
 
     by_source = {}
-    for source in ["drcd", "hotpotqa", "2wiki"]:
-        if source in stats_by_source and stats_by_source[source]["total"] > 0:
-            by_source[source] = _compute_metrics(stats_by_source[source])
+    for source, source_stats in stats_by_source.items():
+        if source_stats["total"] > 0:
+            by_source[source] = _compute_metrics(source_stats)
 
     by_question_type = {}
-    for qtype in ["single-hop", "multi-hop"]:
-        if qtype in stats_by_type and stats_by_type[qtype]["total"] > 0:
-            by_question_type[qtype] = _compute_metrics(stats_by_type[qtype])
+    for qtype, type_stats in stats_by_type.items():
+        if type_stats["total"] > 0:
+            by_question_type[qtype] = _compute_metrics(type_stats)
 
     return {
         "overall": overall_metrics,

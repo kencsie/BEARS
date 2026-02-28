@@ -36,6 +36,7 @@ class QuestionDetail(BaseModel):
     ap: float
     judge_pass: bool
     source_dataset: str
+    question_type: str = "unknown"
     retrieval_time: float = 0.0
     generation_time: float = 0.0
     total_time: float = 0.0

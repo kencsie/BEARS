@@ -87,7 +87,7 @@ Answer "Pass" or "Fail"."""),
             ])
 
             chain = judge_prompt | self._llm
-            result = chain.invoke({
+            result = await chain.ainvoke({
                 "question": question,
                 "gold_answer": gold_answer,
                 "model_answer": model_answer,
@@ -144,7 +144,7 @@ Answer "Pass" or "Fail"."""),
                 logger.error(f"Evaluation error: {e}")
                 continue
 
-        return compute_final_metrics(stats_by_source, stats_by_type, total_queries)
+        return compute_final_metrics(stats_by_source, stats_by_type)
 
     async def evaluate_detailed(self, queries_path: str, limit: int = None) -> schemas.DetailedEvaluateResponse:
         """Run detailed evaluation returning per-question results."""
@@ -202,6 +202,7 @@ Answer "Pass" or "Fail"."""),
                     "ap": retrieval_metrics["ap"],
                     "judge_pass": is_pass,
                     "source_dataset": source_dataset,
+                    "question_type": question_type,
                     "retrieval_time": result.retrieval_time,
                     "generation_time": result.generation_time,
                     "total_time": total_time,
@@ -211,7 +212,7 @@ Answer "Pass" or "Fail"."""),
                 logger.error(f"Evaluation error: {e}")
                 continue
 
-        final = compute_final_metrics(stats_by_source, stats_by_type, total_queries)
+        final = compute_final_metrics(stats_by_source, stats_by_type)
 
         return schemas.DetailedEvaluateResponse(
             overall=schemas.SourceMetrics(**final["overall"]),
@@ -241,7 +242,7 @@ class OrchestratorEvaluator:
                 ("human", "Question: {question}\nGold: {gold_answer}\nModel: {model_answer}\n\nJudgment:"),
             ])
             chain = judge_prompt | self._llm
-            result = chain.invoke({
+            result = await chain.ainvoke({
                 "question": question,
                 "gold_answer": gold_answer,
                 "model_answer": model_answer,
@@ -291,4 +292,4 @@ class OrchestratorEvaluator:
                 logger.error(f"Orchestrator evaluation error: {e}")
                 continue
 
-        return compute_final_metrics(stats_by_source, stats_by_type, len(queries_to_eval))
+        return compute_final_metrics(stats_by_source, stats_by_type)
