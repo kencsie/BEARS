@@ -13,6 +13,7 @@ import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
+from tqdm import tqdm
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -108,7 +109,7 @@ Answer "Pass" or "Fail"."""),
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
 
-        for idx, query in enumerate(queries_to_eval, 1):
+        for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
             gold_doc_ids = set(query.get("gold_doc_ids", []))
@@ -156,7 +157,7 @@ Answer "Pass" or "Fail"."""),
         stats_by_type = defaultdict(_default_stats)
         question_details = []
 
-        for idx, query in enumerate(queries_to_eval, 1):
+        for idx, query in tqdm(enumerate(queries_to_eval, 1), total=total_queries, desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
             gold_doc_ids = query.get("gold_doc_ids", [])
@@ -262,7 +263,7 @@ class OrchestratorEvaluator:
         stats_by_source = defaultdict(_default_stats)
         stats_by_type = defaultdict(_default_stats)
 
-        for idx, query in enumerate(queries_to_eval, 1):
+        for idx, query in tqdm(enumerate(queries_to_eval, 1), total=len(queries_to_eval), desc="Evaluating"):
             question = query.get("question")
             gold_answer = query.get("gold_answer")
             gold_doc_ids = set(query.get("gold_doc_ids", []))
