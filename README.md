@@ -398,7 +398,7 @@ AGENT_REGISTRY["your_agent"] = {
 uv run uvicorn bears.api.api:app --reload --port 8005
 ```
 
-Swagger UI：`http://127.0.0.1:8005/docs`
+Swagger UI：http://127.0.0.1:8005/docs
 
 ### API Endpoints
 
