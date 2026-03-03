@@ -158,6 +158,10 @@ Answer "Pass" or "Fail".""",
                     retrieved_doc_ids, gold_doc_ids
                 )
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
+                if is_pass is None:
+                    logger.warning(
+                        f"Judge failed for question {idx}, not counted in generation_pass"
+                    )
 
                 for stats in [
                     stats_by_source[source_dataset],
@@ -169,7 +173,7 @@ Answer "Pass" or "Fail".""",
                     stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += 1 if is_pass else 0
+                    stats["generation_pass"] += 1 if is_pass is True else 0
                     stats["retrieval_time_sum"] += result.retrieval_time
                     stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
@@ -226,6 +230,10 @@ Answer "Pass" or "Fail".""",
                     retrieved_doc_ids, gold_doc_ids
                 )
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
+                if is_pass is None:
+                    logger.warning(
+                        f"Judge failed for question {idx}, not counted in generation_pass"
+                    )
 
                 for stats in [
                     stats_by_source[source_dataset],
@@ -237,7 +245,7 @@ Answer "Pass" or "Fail".""",
                     stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += 1 if is_pass else 0
+                    stats["generation_pass"] += 1 if is_pass is True else 0
                     stats["retrieval_time_sum"] += result.retrieval_time
                     stats["generation_time_sum"] += result.generation_time
                     stats["total_time_sum"] += total_time
@@ -248,7 +256,7 @@ Answer "Pass" or "Fail".""",
                         "question": question,
                         "gold_answer": gold_answer,
                         "model_answer": model_answer,
-                        "gold_doc_ids": gold_doc_ids,
+                        "gold_doc_ids": list(gold_doc_ids),
                         "retrieved_doc_ids": retrieved_doc_ids,
                         "hit": bool(retrieval_metrics["hit"]),
                         "found_count": retrieval_metrics["found_count"],
@@ -303,7 +311,7 @@ class OrchestratorEvaluator:
 
     async def _judge_answer(
         self, question: str, gold_answer: str, model_answer: str
-    ) -> bool:
+    ) -> Optional[bool]:
         try:
             judge_prompt = ChatPromptTemplate.from_messages(
                 [
@@ -369,6 +377,10 @@ class OrchestratorEvaluator:
                     retrieved_doc_ids, gold_doc_ids
                 )
                 is_pass = await self._judge_answer(question, gold_answer, model_answer)
+                if is_pass is None:
+                    logger.warning(
+                        f"Judge failed for question {idx}, not counted in generation_pass"
+                    )
 
                 for stats in [
                     stats_by_source[source_dataset],
@@ -380,7 +392,7 @@ class OrchestratorEvaluator:
                     stats["gold_sum"] += len(gold_doc_ids)
                     stats["rr_sum"] += retrieval_metrics["avg_rr"]
                     stats["ap_sum"] += retrieval_metrics["ap"]
-                    stats["generation_pass"] += 1 if is_pass else 0
+                    stats["generation_pass"] += 1 if is_pass is True else 0
                     stats["total_time_sum"] += total_time
 
             except Exception as e:
