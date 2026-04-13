@@ -30,6 +30,13 @@ def main():
     parser.add_argument("--detailed", action="store_true", help="Output per-question detailed results")
     parser.add_argument("--output", type=str, default="output/results.json", help="Output file path (default: output/results.json)")
     parser.add_argument("--failures-only", action="store_true", help="With --detailed, only output questions where judge_pass is False")
+    parser.add_argument(
+        "--question-type",
+        type=str,
+        default=None,
+        choices=["multi-hop", "single-hop"],
+        help="Filter queries by question type (multi-hop / single-hop)",
+    )
 
     args = parser.parse_args()
 
@@ -49,12 +56,16 @@ def main():
         evaluator = AgentEvaluator(agent, experiment)
 
         if args.detailed:
-            detailed_results = asyncio.run(evaluator.evaluate_detailed(args.queries, limit=args.limit))
+            detailed_results = asyncio.run(
+                evaluator.evaluate_detailed(args.queries, limit=args.limit, question_type=args.question_type)
+            )
             results = detailed_results.model_dump()
             if args.failures_only:
                 results["questions"] = [q for q in results["questions"] if not q["judge_pass"]]
         else:
-            results = asyncio.run(evaluator.evaluate(args.queries, limit=args.limit))
+            results = asyncio.run(
+                evaluator.evaluate(args.queries, limit=args.limit, question_type=args.question_type)
+            )
     else:
         # Orchestrator evaluation
         from bears.evaluation.evaluator import OrchestratorEvaluator

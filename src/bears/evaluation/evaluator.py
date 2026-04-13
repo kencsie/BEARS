@@ -115,9 +115,12 @@ Answer "Pass" or "Fail".""",
             logger.error(f"LLM-as-Judge error: {e}")
             return None
 
-    async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
+    async def evaluate(self, queries_path: str, limit: int = None, question_type: str = None) -> Dict[str, Any]:
         """Run evaluation on all queries and return aggregated metrics."""
         queries = self._load_queries(queries_path)
+        if question_type:
+            queries = [q for q in queries if q.get("question_type") == question_type]
+            logger.info(f"Filtered to {len(queries)} queries with type='{question_type}'")
         queries_to_eval = queries[:limit] if limit else queries
         total_queries = len(queries_to_eval)
 
@@ -189,10 +192,13 @@ Answer "Pass" or "Fail".""",
         return compute_final_metrics(stats_by_source, stats_by_type)
 
     async def evaluate_detailed(
-        self, queries_path: str, limit: int = None, progress_callback=None
+        self, queries_path: str, limit: int = None, progress_callback=None, question_type: str = None
     ) -> schemas.DetailedEvaluateResponse:
         """Run detailed evaluation returning per-question results."""
         queries = self._load_queries(queries_path)
+        if question_type:
+            queries = [q for q in queries if q.get("question_type") == question_type]
+            logger.info(f"Filtered to {len(queries)} queries with type='{question_type}'")
         queries_to_eval = queries[:limit] if limit else queries
         total_queries = len(queries_to_eval)
 
