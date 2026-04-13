@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import History from './pages/History';
 import EvalResult from './pages/EvalResult';
 import Experiments from './pages/Experiments';
+import Chatbot from './pages/Chatbot';
 
 function App() {
   return (
@@ -24,6 +25,9 @@ function App() {
             <NavLink to="/experiments" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <span className="nav-icon">⚗️</span> Experiments
             </NavLink>
+            <NavLink to="/chatbot" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon">🤖</span> Chatbot
+            </NavLink>
           </nav>
         </aside>
 
@@ -34,6 +38,7 @@ function App() {
             <Route path="/history" element={<History />} />
             <Route path="/results/:filename" element={<EvalResult />} />
             <Route path="/experiments" element={<Experiments />} />
+            <Route path="/chatbot" element={<Chatbot />} />
           </Routes>
         </main>
       </div>
