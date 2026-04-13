@@ -89,4 +89,6 @@ async def run_orchestrated_rag(question: str) -> Dict[str, Any]:
         "context": best.context,
         "trace_id": trace_id,
         "total_time": total_time,
+        "agent_used": result.get("route", "orchestrator"),
+        "confidence": best.confidence,
     }
