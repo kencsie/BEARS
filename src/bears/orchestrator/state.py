@@ -2,11 +2,11 @@
 Orchestrator state definition.
 """
 
-from typing import List, TypedDict
+from typing import List, TypedDict, Optional
 
 from bears.agents.base import AgentResponse
 from bears.router.base import RouterOutput
-
+from bears.core.experiment import ExperimentConfig
 
 class OrchestratorState(TypedDict):
     question: str
@@ -16,3 +16,4 @@ class OrchestratorState(TypedDict):
     final_answer: str
     retry_count: int
     trace_id: str
+    experiment: Optional[ExperimentConfig]

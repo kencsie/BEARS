@@ -56,7 +56,7 @@ def _get_workflow():
     return _workflow
 
 
-async def run_orchestrated_rag(question: str) -> Dict[str, Any]:
+async def run_orchestrated_rag(question: str, experiment=None) -> Dict[str, Any]:
     """Convenience entry point: run the full orchestrator pipeline."""
     import time
 
@@ -71,6 +71,7 @@ async def run_orchestrated_rag(question: str) -> Dict[str, Any]:
         "final_answer": "",
         "retry_count": 0,
         "trace_id": trace_id,
+        "experiment": experiment,
     }
 
     workflow = _get_workflow()

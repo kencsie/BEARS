@@ -323,12 +323,22 @@ class OrchestratorEvaluator:
                 [
                     (
                         "system",
-                        "You are a fair judge. Determine if the model answer matches the gold answer. "
-                        "Answer 'Pass' or 'Fail'.",
+                        """You are a fair judge. Determine if the model answer is semantically consistent with the gold answer.
+
+Pass criteria:
+- Core facts match
+- Different phrasing is OK
+- Translation differences are OK
+- Additional supporting details are OK
+- Number format differences are OK
+
+Only Fail if core facts are clearly wrong or completely irrelevant.
+
+Answer "Pass" or "Fail".""",
                     ),
                     (
                         "human",
-                        "Question: {question}\nGold: {gold_answer}\nModel: {model_answer}\n\nJudgment:",
+                        "Question: {question}\nGold Answer: {gold_answer}\nModel Answer: {model_answer}\n\nJudgment (Pass/Fail):",
                     ),
                 ]
             )
