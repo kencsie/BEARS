@@ -115,9 +115,12 @@ Answer "Pass" or "Fail".""",
             logger.error(f"LLM-as-Judge error: {e}")
             return None
 
-    async def evaluate(self, queries_path: str, limit: int = None) -> Dict[str, Any]:
+    async def evaluate(self, queries_path: str, limit: int = None, question_type: str = None) -> Dict[str, Any]:
         """Run evaluation on all queries and return aggregated metrics."""
         queries = self._load_queries(queries_path)
+        if question_type:
+            queries = [q for q in queries if q.get("question_type") == question_type]
+            logger.info(f"Filtered to {len(queries)} queries with type='{question_type}'")
         queries_to_eval = queries[:limit] if limit else queries
         total_queries = len(queries_to_eval)
 
@@ -189,10 +192,13 @@ Answer "Pass" or "Fail".""",
         return compute_final_metrics(stats_by_source, stats_by_type)
 
     async def evaluate_detailed(
-        self, queries_path: str, limit: int = None, progress_callback=None
+        self, queries_path: str, limit: int = None, progress_callback=None, question_type: str = None
     ) -> schemas.DetailedEvaluateResponse:
         """Run detailed evaluation returning per-question results."""
         queries = self._load_queries(queries_path)
+        if question_type:
+            queries = [q for q in queries if q.get("question_type") == question_type]
+            logger.info(f"Filtered to {len(queries)} queries with type='{question_type}'")
         queries_to_eval = queries[:limit] if limit else queries
         total_queries = len(queries_to_eval)
 
@@ -317,12 +323,22 @@ class OrchestratorEvaluator:
                 [
                     (
                         "system",
-                        "You are a fair judge. Determine if the model answer matches the gold answer. "
-                        "Answer 'Pass' or 'Fail'.",
+                        """You are a fair judge. Determine if the model answer is semantically consistent with the gold answer.
+
+Pass criteria:
+- Core facts match
+- Different phrasing is OK
+- Translation differences are OK
+- Additional supporting details are OK
+- Number format differences are OK
+
+Only Fail if core facts are clearly wrong or completely irrelevant.
+
+Answer "Pass" or "Fail".""",
                     ),
                     (
                         "human",
-                        "Question: {question}\nGold: {gold_answer}\nModel: {model_answer}\n\nJudgment:",
+                        "Question: {question}\nGold Answer: {gold_answer}\nModel Answer: {model_answer}\n\nJudgment (Pass/Fail):",
                     ),
                 ]
             )

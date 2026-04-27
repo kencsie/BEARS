@@ -107,6 +107,39 @@ class GraphStoreManager:
             logger.error(f"Failed to query entity: {e}")
             return []
 
+    def query_2hop_subgraph(self, entity_name: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Query 2-hop subgraph paths from an entity (A→B→C reasoning chains)."""
+        try:
+            cypher_query = """
+            MATCH (e:Entity {name: $name})-[r1]-(mid)-[r2]-(end)
+            WHERE e <> end AND mid <> end
+            RETURN e.name AS start, type(r1) AS rel1, mid.name AS mid,
+                   type(r2) AS rel2, end.name AS end,
+                   mid.doc_id AS mid_doc_id, end.doc_id AS end_doc_id
+            LIMIT $limit
+            """
+            results = self.graph.query(cypher_query, {"name": entity_name, "limit": limit})
+            return results
+        except Exception as e:
+            logger.error(f"Failed to query 2-hop subgraph: {e}")
+            return []
+
+    def query_entity_with_doc_ids(self, entity_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Query 1-hop relationships including doc_ids."""
+        try:
+            cypher_query = """
+            MATCH (e:Entity {name: $name})-[r]-(neighbor)
+            RETURN e.name AS entity, type(r) AS relationship,
+                   neighbor.name AS neighbor,
+                   r.doc_id AS rel_doc_id, neighbor.doc_id AS neighbor_doc_id
+            LIMIT $limit
+            """
+            results = self.graph.query(cypher_query, {"name": entity_name, "limit": limit})
+            return results
+        except Exception as e:
+            logger.error(f"Failed to query entity with doc_ids: {e}")
+            return []
+
     def query_cypher(
         self, cypher_query: str, params: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:

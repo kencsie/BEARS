@@ -6,7 +6,7 @@ VectorRetriever and GraphRetriever adapted for bears imports.
 """
 
 import logging
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -92,6 +92,51 @@ class GraphRetriever:
             logger.warning(f"Graph retrieval failed: {e}")
             return []
 
+    def retrieve_2hop_paths(
+        self, question: str, max_entities: int = 3, limit_per_entity: int = 15
+    ) -> List[Dict]:
+        """Retrieve 2-hop reasoning paths (A→B→C) plus 1-hop triples from the graph."""
+        try:
+            entities = self._extract_entities(question)
+            if not entities:
+                return []
+
+            entities = entities[:max_entities]
+            all_paths = []
+            seen_paths: set = set()
+
+            for entity in entities:
+                # 2-hop paths
+                for p in self.graph_store.query_2hop_subgraph(entity, limit=limit_per_entity):
+                    key = f"{p.get('start')}-{p.get('mid')}-{p.get('end')}"
+                    if key not in seen_paths:
+                        seen_paths.add(key)
+                        path_str = (
+                            f"{p.get('start')} -[{p.get('rel1')}]-> "
+                            f"{p.get('mid')} -[{p.get('rel2')}]-> {p.get('end')}"
+                        )
+                        all_paths.append({**p, "path_str": path_str})
+
+                # 1-hop with doc_ids
+                for r in self.graph_store.query_entity_with_doc_ids(entity, limit=limit_per_entity):
+                    key = f"{r.get('entity')}-{r.get('neighbor')}"
+                    if key not in seen_paths:
+                        seen_paths.add(key)
+                        path_str = f"{r.get('entity')} -[{r.get('relationship')}]-> {r.get('neighbor')}"
+                        all_paths.append({
+                            "start": r.get("entity"),
+                            "rel1": r.get("relationship"),
+                            "end": r.get("neighbor"),
+                            "path_str": path_str,
+                            "end_doc_id": r.get("neighbor_doc_id"),
+                        })
+
+            logger.debug(f"Graph retrieved {len(all_paths)} paths (1-hop + 2-hop)")
+            return all_paths
+        except Exception as e:
+            logger.warning(f"2-hop path retrieval failed: {e}")
+            return []
+
     def get_related_entities(self, entities: List[str], max_neighbors: int = 5) -> List[str]:
         """Find related entities from graph for query expansion."""
         try:
@@ -106,6 +151,10 @@ class GraphRetriever:
         except Exception as e:
             logger.warning(f"Graph expansion failed: {e}")
             return []
+
+    def extract_entities(self, question: str) -> List[str]:
+        """Public wrapper for entity extraction."""
+        return self._extract_entities(question)
 
     def _extract_entities(self, question: str) -> List[str]:
         """Extract entities from question using LLM."""

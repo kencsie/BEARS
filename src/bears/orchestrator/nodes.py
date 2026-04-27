@@ -45,19 +45,19 @@ async def router_node(state: OrchestratorState) -> Dict[str, Any]:
 
 async def hybrid_agent_node(state: OrchestratorState) -> Dict[str, Any]:
     agent = get_agent("hybrid")
-    result = await agent.run(state["question"])
+    result = await agent.run(state["question"], state.get("experiment"))
     return _agent_result_to_state(result)
 
 
 async def kg_agent_node(state: OrchestratorState) -> Dict[str, Any]:
     agent = get_agent("kg")
-    result = await agent.run(state["question"])
+    result = await agent.run(state["question"], state.get("experiment"))
     return _agent_result_to_state(result)
 
 
 async def agentic_agent_node(state: OrchestratorState) -> Dict[str, Any]:
     agent = get_agent("agentic")
-    result = await agent.run(state["question"])
+    result = await agent.run(state["question"], state.get("experiment"))
     return _agent_result_to_state(result)
 
 
