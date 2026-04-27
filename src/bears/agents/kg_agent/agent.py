@@ -44,6 +44,12 @@ class KGAgent(BaseRAGAgent):
             temperature=self.exp.temperature,
             openai_api_key=settings.OPENAI_API_KEY,
         )
+        gen_model = self.exp.generation_model or self.exp.model
+        self._gen_llm = ChatOpenAI(
+            model=gen_model,
+            temperature=self.exp.temperature,
+            openai_api_key=settings.OPENAI_API_KEY,
+        ) if gen_model != self.exp.model else self._llm
 
     @property
     def name(self) -> str:
@@ -328,7 +334,7 @@ B國政府所在地
         ])
 
         try:
-            chain = prompt | self._llm
+            chain = prompt | self._gen_llm
 
             from bears.core.langfuse_helper import get_callbacks
             callbacks = get_callbacks()

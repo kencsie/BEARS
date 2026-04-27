@@ -13,6 +13,7 @@ class ExperimentConfig(BaseModel):
 
     # LLM
     model: str = "gpt-4o-mini"
+    generation_model: str = ""  # if set, used for answer generation only
     temperature: float = 0.0
 
     # Retrieval

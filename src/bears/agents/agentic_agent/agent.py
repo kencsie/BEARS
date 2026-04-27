@@ -50,6 +50,12 @@ class AgenticAgent(BaseRAGAgent):
             api_key=settings.OPENAI_API_KEY,
             temperature=0.0,
         )
+        gen_model = self.exp.generation_model or self.exp.model
+        self._gen_llm = ChatOpenAI(
+            model=gen_model,
+            api_key=settings.OPENAI_API_KEY,
+            temperature=0.0,
+        ) if gen_model != self.exp.model else self._llm
 
     @property
     def name(self) -> str:
@@ -206,7 +212,7 @@ class AgenticAgent(BaseRAGAgent):
                 ("system", GENERATE_SYSTEM_PROMPT),
                 ("human", "{user_input}"),
             ])
-            chain = chain_prompt | self._llm.bind(temperature=0.3)
+            chain = chain_prompt | self._gen_llm.bind(temperature=0.3)
             resp = chain.invoke(
                 {"user_input": f"【參考文件】\n{context_str}\n\n【問題】\n{question}"},
                 config={"callbacks": get_callbacks()},
