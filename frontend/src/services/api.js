@@ -5,66 +5,90 @@ const api = axios.create({
     headers: { 'Content-Type': 'application/json' },
 });
 
-// --- Evaluation ---
+// --- Retrieval (single query — chatbot mode) ---
 
-export const evalAPI = {
-    /** Start an evaluation task */
-    start: (params) => api.post('/eval/start', params),
-
-    /** Get evaluation task status */
-    getStatus: (taskId) => api.get(`/eval/status/${taskId}`),
-
-    /** Get evaluation results */
-    getResults: (taskId) => api.get(`/eval/results/${taskId}`),
-
-    /** List past evaluation result files */
-    getHistory: () => api.get('/eval/history'),
-
-    /** Load a specific history file */
-    getHistoryFile: (filename) => api.get(`/eval/history/${filename}`),
-
-    /** List agents available for evaluation */
-    getAgents: () => api.get('/eval/agents'),
-
-    /** Get query statistics */
-    getQueryStats: () => api.get('/eval/queries/stats'),
+export const retrieveAPI = {
+    retrieve: (question, trueAnswer = null, trueContext = null) =>
+        api.post('/retrieve', {
+            question,
+            true_answer: trueAnswer,
+            true_context: trueContext,
+        }),
 };
 
-// --- Query ---
+// --- Generation (chatbot mode: retrieval + domain generator) ---
 
-export const queryAPI = {
-    /** Single question query */
-    query: (question, agent = null) =>
-        api.post('/query', { question, agent }),
-
-    /** Health check */
-    health: () => api.get('/health'),
+export const generateAPI = {
+    generate: (question, generator = 'educational') =>
+        api.post('/generate', { question, generator }),
 };
 
-// --- Experiments ---
+// --- Batch Evaluation (streaming NDJSON) ---
+// Uses native fetch instead of axios so we can read the response as a stream.
+export const evaluateAPI = {
+    /**
+     * Stream batch evaluation results.
+     * @param {object[]} queries  - Array of QueryItem objects
+     * @param {number}   limit    - How many to run
+     * @param {function} onResult - Called for each retrieved result (includes _progress)
+     * @param {function} onDone   - Called once with { output_file, count }
+     * @param {AbortSignal} signal
+     */
+    streamBatch: async (queries, limit, onResult, onDone, signal) => {
+        const response = await fetch('/api/evaluate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queries, limit }),
+            signal,
+        });
 
-export const experimentsAPI = {
-    /** List all experiment configs */
-    list: () => api.get('/experiments'),
+        if (!response.ok) {
+            const msg = await response.text();
+            throw new Error(`Server error ${response.status}: ${msg}`);
+        }
 
-    /** Get a specific experiment config */
-    get: (name) => api.get(`/experiments/${name}`),
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-    /** Create a new experiment config */
-    create: (name, config) => api.post('/experiments', { name, config }),
-
-    /** Update an experiment config */
-    update: (name, config) => api.put(`/experiments/${name}`, { config }),
-
-    /** Delete an experiment config */
-    delete: (name) => api.delete(`/experiments/${name}`),
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                    const data = JSON.parse(line);
+                    if (data._done) onDone(data);
+                    else onResult(data);
+                } catch { /* skip malformed line */ }
+            }
+        }
+    },
 };
 
 // --- Documents ---
 
 export const docsAPI = {
-    /** Fetch document content by ID from ChromaDB */
     getDocument: (docId) => api.get(`/docs/${docId}`),
+};
+
+// --- Experiments ---
+
+export const experimentsAPI = {
+    list: () => api.get('/experiments'),
+    get: (name) => api.get(`/experiments/${name}`),
+    create: (name, config) => api.post('/experiments', { name, config }),
+    update: (name, config) => api.put(`/experiments/${name}`, { config }),
+    delete: (name) => api.delete(`/experiments/${name}`),
+};
+
+// --- Health ---
+
+export const healthAPI = {
+    check: () => api.get('/health'),
 };
 
 export default api;
