@@ -1,78 +1,90 @@
-"""
-API request/response schemas.
+"""API request / response schemas."""
 
-All API data models are defined here for centralized management.
-"""
+from typing import List, Optional
 
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
 
 
-# --- Evaluation schemas ---
+# ── Retrieval ─────────────────────────────────────────────────────────────────
 
-
-class EvalStartRequest(BaseModel):
-    """Request to start an evaluation task."""
-
-    agent: Optional[str] = None
-    orchestrator: bool = False
-    limit: Optional[int] = None
-    config_path: Optional[str] = None
-    detailed: bool = True
-    failures_only: bool = False
-    output_filename: Optional[str] = None
-
-
-class EvalStartResponse(BaseModel):
-    task_id: str
-    status: str
-    message: str
-
-
-class EvalStatusResponse(BaseModel):
-    task_id: str
-    status: str  # pending / running / completed / failed
-    progress: int
-    total: int
-    message: str
-
-
-class EvalResultResponse(BaseModel):
-    task_id: str
-    status: str
-    results: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-# --- Query schemas ---
-
-
-class QueryRequest(BaseModel):
-    """Request for a single question query."""
-
+class RetrieveRequest(BaseModel):
     question: str
-    agent: Optional[str] = None
+    true_answer: Optional[str] = None   # gold answer for offline evaluation
+    true_context: Optional[List[str]] = None  # gold context for offline evaluation
 
 
-class QueryResponse(BaseModel):
+class RetrieveResponse(BaseModel):
+    """Standard retrieval output — compatible with external evaluation systems.
+
+    Fields
+    ------
+    question      : the original user question
+    answer        : the system-generated answer
+    context       : list of retrieved context chunks (reranked Top-5)
+    true_answer   : gold answer (echoed from request if provided)
+    true_context  : gold context (echoed from request if provided)
+    retrieval_time   : seconds spent on retrieval (agentic loop)
+    generation_time  : seconds spent on final LLM generation
+    total_time       : wall-clock seconds for the full pipeline
+    prompt_tokens    : total input tokens consumed across all LLM calls
+    completion_tokens: total output tokens generated across all LLM calls
+    total_tokens     : prompt_tokens + completion_tokens
+    """
+    question: str
     answer: str
-    agent_used: str
-    retrieved_doc_ids: List[str]
-    confidence: float
+    context: List[str]
+    true_answer: Optional[str] = None
+    true_context: Optional[List[str]] = None
+    retrieval_time: float = 0.0
+    generation_time: float = 0.0
+    total_time: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
-# --- Experiment schemas ---
+# ── Generation (chatbot) ──────────────────────────────────────────────────────
 
+class GenerateRequest(BaseModel):
+    question: str
+    generator: str = "educational"  # name of the generator to use
+
+
+class GenerateResponse(BaseModel):
+    question: str
+    generated_content: str          # output from the domain-specific generator
+    context: List[str]              # retrieved context passed to generator
+    retrieval_time: float = 0.0
+    generation_time: float = 0.0
+    total_time: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+# ── Batch Evaluation ─────────────────────────────────────────────────────────
+
+class QueryItem(BaseModel):
+    question_id: Optional[str] = None
+    question: str
+    gold_answer: Optional[str] = None
+    gold_doc_ids: Optional[List[str]] = None
+    source_dataset: Optional[str] = None
+    question_type: Optional[str] = None
+
+
+class EvaluateBatchRequest(BaseModel):
+    queries: List[QueryItem]
+    limit: Optional[int] = None  # None = run all
+
+
+# ── Experiment configs (kept for future use) ──────────────────────────────────
 
 class ExperimentConfig(BaseModel):
-    """Experiment configuration (mirrors core/experiment.py for API use)."""
-
     model: str = "gpt-4o-mini"
     temperature: float = 0.0
     top_k: int = 5
-    rerank_alpha: float = 0.7
-    rerank_beta: float = 0.3
-    agent: str = "hybrid"
+    agent: str = "agentic"
 
 
 class ExperimentCreateRequest(BaseModel):
