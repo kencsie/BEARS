@@ -32,13 +32,22 @@ RESULTS_DIR = Path("output")
 
 # ── /retrieve ─────────────────────────────────────────────────────────────────
 
+def _to_core_experiment(api_exp):
+    """Convert API ExperimentConfig schema to core ExperimentConfig."""
+    if api_exp is None:
+        return None
+    from bears.core.experiment import ExperimentConfig as CoreExp
+    return CoreExp(**api_exp.model_dump())
+
+
 @router.post("/retrieve", response_model=RetrieveResponse)
 async def retrieve(request: RetrieveRequest):
     """Run Agentic RAG and return the standard Q/A/C evaluation format."""
     from bears.orchestrator.graph import run_orchestrated_rag
 
+    exp = _to_core_experiment(request.experiment)
     start = time.time()
-    result = await run_orchestrated_rag(request.question)
+    result = await run_orchestrated_rag(request.question, experiment=exp)
     total_time = time.time() - start
 
     return RetrieveResponse(
@@ -53,6 +62,8 @@ async def retrieve(request: RetrieveRequest):
         prompt_tokens=result.get("prompt_tokens", 0),
         completion_tokens=result.get("completion_tokens", 0),
         total_tokens=result.get("total_tokens", 0),
+        tool_used=result.get("tools_used", []),
+        experiment_config=request.experiment.model_dump() if request.experiment else None,
     )
 
 
@@ -106,6 +117,11 @@ async def _stream_batch(request: EvaluateBatchRequest):
     """Async generator: yields NDJSON lines, one per query, then a _done sentinel."""
     from bears.orchestrator.graph import run_orchestrated_rag
 
+    exp = _to_core_experiment(request.experiment)
+    exp_dict = request.experiment.model_dump() if request.experiment else {
+        "model": "gpt-4o-mini", "temperature": 0.0, "top_k": 5, "agent": "agentic"
+    }
+
     queries = request.queries
     if request.limit is not None:
         queries = queries[: request.limit]
@@ -117,7 +133,7 @@ async def _stream_batch(request: EvaluateBatchRequest):
     for i, q in enumerate(queries):
         wall_start = time.time()
         try:
-            result = await run_orchestrated_rag(q.question)
+            result = await run_orchestrated_rag(q.question, experiment=exp)
             entry = {
                 "question": q.question,
                 "answer": result.get("answer", ""),
@@ -152,15 +168,16 @@ async def _stream_batch(request: EvaluateBatchRequest):
         streamed = {**entry, "_progress": {"current": i + 1, "total": total}}
         yield json.dumps(streamed, ensure_ascii=False) + "\n"
 
-    # Persist to output/ folder
+    # Persist to output/ folder — experiment_config once at top level
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     out_path = RESULTS_DIR / f"eval_{timestamp}.json"
     out_path.write_text(
-        json.dumps(all_results, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps({"experiment_config": exp_dict, "results": all_results}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     logger.info(f"Batch evaluation saved to {out_path}")
 
-    yield json.dumps({"_done": True, "output_file": str(out_path), "count": total}, ensure_ascii=False) + "\n"
+    yield json.dumps({"_done": True, "output_file": str(out_path), "count": total, "experiment_config": exp_dict}, ensure_ascii=False) + "\n"
 
 
 @router.post("/evaluate")
@@ -183,14 +200,23 @@ async def list_history():
     out = []
     for f in files[:50]:
         try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            datasets = list({r.get("source_dataset", "") for r in data if r.get("source_dataset")})
-            avg_time = (sum(r.get("total_time", 0) for r in data) / len(data)) if data else 0
+            raw = json.loads(f.read_text(encoding="utf-8"))
+            # Support both new {"experiment_config":…,"results":[…]} and old flat-array format
+            if isinstance(raw, dict):
+                exp_cfg = raw.get("experiment_config") or {}
+                results = raw.get("results", [])
+            else:
+                exp_cfg = raw[0].get("experiment_config", {}) if raw else {}
+                results = raw
+            datasets = list({r.get("source_dataset", "") for r in results if r.get("source_dataset")})
+            avg_time = (sum(r.get("total_time", 0) for r in results) / len(results)) if results else 0
             out.append({
                 "filename": f.name,
-                "count": len(data),
+                "count": len(results),
                 "datasets": sorted(datasets),
                 "avg_time": round(avg_time, 1),
+                "model": exp_cfg.get("model", ""),
+                "experiment_config": exp_cfg,
             })
         except Exception:
             out.append({"filename": f.name, "count": 0, "datasets": [], "avg_time": 0})
@@ -205,7 +231,12 @@ async def get_history_file(filename: str):
     path = RESULTS_DIR / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    # Normalise to {experiment_config, results} for the frontend
+    if isinstance(raw, list):
+        exp_cfg = raw[0].get("experiment_config") if raw else None
+        return {"experiment_config": exp_cfg, "results": raw}
+    return raw
 
 
 # ── /health ───────────────────────────────────────────────────────────────────

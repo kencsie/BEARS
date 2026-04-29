@@ -5,12 +5,22 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+# ── Experiment config (defined first so other schemas can reference it) ───────
+
+class ExperimentConfig(BaseModel):
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.0
+    top_k: int = 5
+    agent: str = "agentic"
+
+
 # ── Retrieval ─────────────────────────────────────────────────────────────────
 
 class RetrieveRequest(BaseModel):
     question: str
     true_answer: Optional[str] = None   # gold answer for offline evaluation
     true_context: Optional[List[str]] = None  # gold context for offline evaluation
+    experiment: Optional[ExperimentConfig] = None
 
 
 class RetrieveResponse(BaseModel):
@@ -41,6 +51,8 @@ class RetrieveResponse(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    tool_used: List[str] = []
+    experiment_config: Optional[dict] = None
 
 
 # ── Generation (chatbot) ──────────────────────────────────────────────────────
@@ -76,15 +88,7 @@ class QueryItem(BaseModel):
 class EvaluateBatchRequest(BaseModel):
     queries: List[QueryItem]
     limit: Optional[int] = None  # None = run all
-
-
-# ── Experiment configs (kept for future use) ──────────────────────────────────
-
-class ExperimentConfig(BaseModel):
-    model: str = "gpt-4o-mini"
-    temperature: float = 0.0
-    top_k: int = 5
-    agent: str = "agentic"
+    experiment: Optional[ExperimentConfig] = None
 
 
 class ExperimentCreateRequest(BaseModel):
