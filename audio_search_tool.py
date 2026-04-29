@@ -17,10 +17,7 @@ collection = db[COLLECTION_NAME]
 
 # 使用 Langfuse 追蹤
 client = LangfuseOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-    base_url=os.getenv("LANGFUSE_BASE_URL")
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 def search_and_answer(question):

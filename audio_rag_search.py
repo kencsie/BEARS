@@ -11,7 +11,7 @@ load_dotenv()
 
 # ================= 設定區 =================
 DB_NAME = "audio_rag_db"
-COLLECTION_NAME = "squad_segments"
+COLLECTION_NAME = "audio_knowledge_base"
 JSON_FILE = "spoken_squad_100.json"
 
 # 初始化
@@ -19,14 +19,12 @@ mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client[DB_NAME]
 collection = db[COLLECTION_NAME]
 
-# 使用 Langfuse 封裝的 OpenAI
+# 使用 Langfuse 封裝的 OpenAI (修正過的初始化)
 client = LangfuseOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("LANGFUSE_BASE_URL") # 確保 Langfuse 有正確掛載
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 def get_query_vector(text):
-    """計算問題的向量"""
     res = client.embeddings.create(
         input=text,
         model="text-embedding-3-small"
@@ -34,7 +32,6 @@ def get_query_vector(text):
     return res.data[0].embedding
 
 def search_audio_context(query_vector):
-    """在 MongoDB 執行向量搜尋"""
     pipeline = [
         {
             "$vectorSearch": {
@@ -49,9 +46,7 @@ def search_audio_context(query_vector):
             "$project": {
                 "_id": 0,
                 "context": 1,
-                "audio_filename": 1,
-                "question": 1,
-                "answer": 1,
+                "audio_id": 1,
                 "score": {"$meta": "vectorSearchScore"}
             }
         }
@@ -60,67 +55,61 @@ def search_audio_context(query_vector):
     return results[0] if results else None
 
 def generate_answer(question, context):
-    """呼叫 GPT-4o 根據檢索內容回答"""
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are a helpful assistant. Answer the question based ONLY on the provided context (which is transcribed from an audio clip). If the answer is not in the context, say you don't know."},
+            {"role": "system", "content": "Answer based ONLY on the context."},
             {"role": "user", "content": f"Context: {context}\n\nQuestion: {question}"}
         ],
-        name="audio-rag-qa" # Langfuse 中的 Trace 名稱
+        name="audio-rag-batch-eval"
     )
     return response.choices[0].message.content
 
 def main():
-    if not os.path.exists(JSON_FILE):
-        print("❌ 找不到評測檔案")
-        return
-
     with open(JSON_FILE, "r", encoding="utf-8") as f:
         qa_data = json.load(f)
 
     results = []
-    print(f"🚀 開始聲音 RAG 評測 (總計 {len(qa_data)} 題)...")
+    print(f"Starting automated evaluation for 100 questions...")
 
-    for item in tqdm(qa_data):
+    for i, item in enumerate(tqdm(qa_data)):
         q_text = item["question"]
         gt_ans = item["answer"]
         
-        # 1. 搜尋
+        # 1. Search
         q_vector = get_query_vector(q_text)
         retrieved = search_audio_context(q_vector)
         
         if retrieved:
             r_context = retrieved["context"]
-            r_audio = retrieved["audio_filename"]
+            r_audio_id = retrieved["audio_id"]
             r_score = retrieved["score"]
-            # 2. 回答
+            # Check hit
+            is_hit = (r_audio_id == i)
+            # 2. Answer
             ai_ans = generate_answer(q_text, r_context)
-            # 3. 判斷命中 (這裡以是否找回正確的 context ID 或音檔名為準)
-            # 在 SQuAD 中，我們通常判斷檢索到的 context 是否包含正確答案
-            is_hit = (r_audio == f"audio_{qa_data.index(item)}.mp3") 
         else:
-            r_context = "Not Found"
-            r_audio = "None"
-            r_score = 0
-            ai_ans = "Search Failed"
             is_hit = False
+            ai_ans = "Search Failed"
+            r_audio_id = -1
+            r_score = 0
 
         results.append({
+            "ID": i,
             "Question": q_text,
-            "GT Answer": gt_ans,
-            "Retrieved Audio": r_audio,
+            "GT": gt_ans,
             "Hit": is_hit,
+            "Retrieved_ID": r_audio_id,
             "Score": r_score,
-            "AI Answer": ai_ans
+            "AI_Answer": ai_ans
         })
 
-    # 存檔
     df = pd.DataFrame(results)
-    df.to_csv("audio_rag_eval_results.csv", index=False, encoding="utf-8-sig")
+    df.to_csv("audio_rag_full_eval.csv", index=False, encoding="utf-8-sig")
     
-    print(f"\n✅ 評測完成！結果已存入 audio_rag_eval_results.csv")
-    print(f"📈 整體命中率: {df['Hit'].mean():.1%}")
+    print(f"\nEvaluation Complete!")
+    print(f"Top-1 Retrieval Hit Rate: {df['Hit'].mean():.1%}")
+    print(f"Detailed results saved to audio_rag_full_eval.csv")
 
 if __name__ == "__main__":
     main()
