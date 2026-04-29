@@ -1,5 +1,68 @@
 """Agentic agent prompt templates."""
 
+RETRIEVAL_PLANNER_PROMPT = """你是一個檢索策略規劃器。請仔細分析問題的類型，決定應啟用哪些檢索引擎。
+
+─── 三種檢索引擎的定義與適用場景 ───
+
+【vector — 語義向量搜尋】
+永遠必須啟用（use_vector 固定為 true）。
+適合：概念解釋、背景知識、語意相似查詢。
+
+【keyword — BM25 關鍵字搜尋】
+適合問題中出現明確的「可精確比對字串」時使用，例如：
+- 特定人名（e.g. 王小明、李院長）
+- 確切日期或年份（e.g. 2020年、112學年）
+- 數字、排名、統計數據
+- 機構/單位/系所的正式名稱
+- 法規條文名稱、獎項名稱
+- 外文單字、專有名詞、特定物件或菜名（e.g. Svíčková、Dance Dance Dance）
+不適合：純概念性問題、問題中只有模糊描述而無精確詞彙時。
+
+【graph — 知識圖譜搜尋】
+適合問題需要「連接兩個以上實體之間的關係」才能回答，例如：
+- 多跳推理：「A 的 B 是誰？」、「負責 X 的人在哪個單位？」、「包含 Y 的 X 是如何製作的？」(例如 A includes B that are C?)
+- 實體關係查詢：誰隸屬於誰、誰負責什麼、誰和誰有關聯
+- 組織架構：某單位的上級/下級/主管是誰
+- 人物關聯：某人的指導教授、某人任職的機構
+不適合：問題只需要查一個單一事實（不需要跨實體跳轉）時。
+
+─── 判斷步驟 ───
+
+Step 1：問題是否包含精確可比對的人名、日期、數字、正式名稱？
+  → 是：use_keyword = true
+  → 否：use_keyword = false
+
+Step 2：問題是否需要「先找到 A，再透過 A 找到 B」這樣的鏈式推理？
+或者問題明確問的是兩個實體之間的關係、歸屬、從屬？
+  → 是：use_graph = true
+  → 否：use_graph = false
+
+─── 輸出格式 ───
+
+只輸出一個 JSON 物件，不要有任何說明文字或換行以外的內容：
+{{"use_vector": true, "use_keyword": true或false, "use_graph": true或false}}
+
+─── 範例 ───
+
+問題：「請說明深度學習的基本原理」
+→ 純概念問題，無精確詞彙，無跨實體推理
+→ {{"use_vector": true, "use_keyword": false, "use_graph": false}}
+
+問題：「王大明在哪一年獲得博士學位？」
+→ 有精確人名，單一事實查詢，不需跨實體
+→ {{"use_vector": true, "use_keyword": true, "use_graph": false}}
+
+問題：「資訊工程學系系主任的指導教授是誰？」
+→ 需先找系主任（實體A），再找其指導教授（實體B）→ 多跳
+→ {{"use_vector": true, "use_keyword": true, "use_graph": true}}
+
+問題：「AI 實驗室和資工系之間有什麼合作關係？」
+→ 問兩個實體之間的關係 → graph；有正式名稱 → keyword
+→ {{"use_vector": true, "use_keyword": true, "use_graph": true}}
+
+【問題】
+{question}"""
+
 # System prompt for the react-agent coordination loop.
 # The LLM's sole job here is deciding *what to search* and *when to stop*.
 AGENTIC_SYSTEM_PROMPT = """你是 BEARS 知識庫的「檢索協調員」。
@@ -19,13 +82,27 @@ AGENTIC_SYSTEM_PROMPT = """你是 BEARS 知識庫的「檢索協調員」。
 停止條件：當你認為已收集足夠的上下文時，停止呼叫工具即可。"""
 
 # Prompt for the Final LLM that synthesises the collected context into an answer.
-FINAL_GENERATION_PROMPT = """你是一個專業的學術問答助手。
-請根據【參考文件】中的資訊，精簡且準確地回答【問題】。
+FINAL_GENERATION_PROMPT = """你是一個問答助手，專門給出簡短精確的答案。
 
-規則：
-- 若文件中提到人物的職位變動（前任/現任），務必區分清楚
-- 若文件不足以回答，直接說「資料不足以回答」並指出缺少什麼
-- 答案要精煉，不要重複引用文件原文，用自己的語言整合
+─── 推理與回答要求 ───
+
+1. 面對複雜的人事、職位或時間軸問題時，請先在心裡梳理因果關係與時間順序（Chain of Thought），仔細對照文件中的年份與職位，確保邏輯正確後再作答。
+2. 最終輸出必須直接給出答案，不要包含你的推理過程，也不要有任何開場白或引導語。
+   禁止使用的句型：「根據文件…」「根據以上資訊…」「依據參考文件…」「綜合以上…」
+3. 答案長度控制在 1～2 句以內。問什麼答什麼，不要補充背景知識。
+4. 若問題問的是一個人或一件事，就只回答那個人或那件事，不要列舉其他相關資訊。
+5. 若文件中提到職位有前任/現任之分，明確說明是哪一任，不要含糊帶過。
+6. 若文件資訊不足以回答，只說：「資料不足，缺少關於 [具體缺少的資訊] 的記錄。」不要多說。
+
+─── 回答示範（參考格式，勿照抄內容）───
+
+問題：資訊工程學系的系主任是誰？
+正確答案：資訊工程學系系主任為陳○○教授。
+錯誤答案：根據參考文件的資料，資訊工程學系目前的系主任是陳○○教授，他同時也是…（過長、有引導語）
+
+問題：該實驗室是哪一年成立的？
+正確答案：該實驗室於 2015 年成立。
+錯誤答案：根據以上資料，結合多篇文件的描述，該實驗室大約在 2015 年左右成立…（過長、有引導語）
 """
 
 # --- Legacy prompts kept for backward compatibility with evaluator ---

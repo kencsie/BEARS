@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import ExperimentPanel, { DEFAULT_EXPERIMENT } from '../components/ExperimentPanel';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ function HistoryPanel({ history, activeFile, onSelect, loading }) {
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               {h.count} 題 · avg {fmtTime(h.avg_time)}
+              {h.model && <span style={{ color: 'var(--accent-cyan)', marginLeft: '4px' }}>· {h.model}</span>}
             </div>
             {h.datasets?.length > 0 && (
               <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
@@ -200,8 +202,8 @@ function DetailModal({ row, onClose }) {
         </div>
 
         <div className="modal-body">
-          {/* Timing */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {/* Timing + Experiment config */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {[
               { label: '檢索時間',   value: fmtTime(row.retrieval_time),   color: 'var(--accent-blue)' },
               { label: '生成時間',   value: fmtTime(row.generation_time),  color: 'var(--accent-cyan)' },
@@ -212,6 +214,22 @@ function DetailModal({ row, onClose }) {
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{m.label}</span>
               </div>
             ))}
+            {row.experiment_config && (
+              <div style={{
+                marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: '4px',
+                background: 'var(--bg-input)', border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+              }}>
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>實驗參數</span>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {Object.entries(row.experiment_config).map(([k, v]) => (
+                    <span key={k} style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {k}: <span style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{String(v)}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Question */}
@@ -376,6 +394,7 @@ const EvalBatch = () => {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeFile, setActiveFile]     = useState('');
   const [selectedRow, setSelectedRow]   = useState(null);
+  const [experiment, setExperiment]     = useState(DEFAULT_EXPERIMENT);
   const abortRef = useRef(null);
 
   const fetchHistory = () =>
@@ -414,10 +433,13 @@ const EvalBatch = () => {
       const res = await fetch(`/api/history/${h.filename}`);
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data = await res.json();
-      setResults(data);
+      // data is always {experiment_config, results} (backend normalises old flat-array too)
+      const expCfg = data.experiment_config || null;
+      const rows = (data.results ?? data).map(r => ({ ...r, experiment_config: expCfg }));
+      setResults(rows);
       setActiveFile(h.filename);
       setOutputFile(h.filename);
-      setProgress({ current: data.length, total: data.length });
+      setProgress({ current: rows.length, total: rows.length });
       setError('');
       setQueries([]);
     } catch (e) {
@@ -442,7 +464,7 @@ const EvalBatch = () => {
       const response = await fetch('/api/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queries: selected, limit }),
+        body: JSON.stringify({ queries: selected, limit, experiment }),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -466,6 +488,9 @@ const EvalBatch = () => {
             const data = JSON.parse(line);
             if (data._done) {
               setOutputFile(data.output_file);
+              if (data.experiment_config) {
+                setResults(prev => prev.map(r => ({ ...r, experiment_config: data.experiment_config })));
+              }
               fetchHistory();
             } else {
               if (data._progress) setProgress(data._progress);
@@ -587,6 +612,9 @@ const EvalBatch = () => {
               </button>
             )}
           </div>
+
+          {/* Experiment params */}
+          <ExperimentPanel value={experiment} onChange={setExperiment} disabled={isRunning} />
 
           {/* Progress bar */}
           {(isRunning || (progress.total > 0 && results.length > 0 && !activeFile)) && (
