@@ -81,6 +81,45 @@ AGENTIC_SYSTEM_PROMPT = """你是 BEARS 知識庫的「檢索協調員」。
 
 停止條件：當你認為已收集足夠的上下文時，停止呼叫工具即可。"""
 
+# Classifies whether a query is a short factual lookup or an open-ended task,
+# so the agent can swap in a different final-generation prompt accordingly.
+QUESTION_TYPE_CLASSIFIER_PROMPT = """你是一個問題類型分類器。你要判斷使用者問題是「事實型」還是「開放問答型」，以決定後續用哪種風格回答。
+
+─── 兩種類型的定義 ───
+
+【factual — 事實型】
+問單一、可驗證的事實。答案通常是一個名字、日期、數字、地點、單一名詞或一句話。
+特徵詞彙：誰、何時、哪一年、在哪裡、哪一個、多少、是什麼（指特定事物）。
+例：「王大明在哪一年獲得博士學位？」「美國第一任總統是誰？」「PMP 的工作經驗門檻是多少？」
+
+【open_ended — 開放問答型】
+問建議、規劃、設計、推薦、做法。答案需要結構化、條列式、可能含多個面向。
+特徵詞彙：請推薦、請設計、如何（教/做/規劃）、有哪些（活動/資源/方法）、幫我準備、怎麼備課、設計評量。
+例：「請推薦適合五年級數學的教學活動」「如何設計加減乘除的單元評量」「怎麼幫小學生介紹台灣歷史？」
+
+─── 輸出格式 ───
+
+只輸出一個 JSON 物件，不要有任何說明文字：
+{{"type": "factual"}} 或 {{"type": "open_ended"}}
+
+─── 範例 ───
+
+問題：「王大明在哪一年獲得博士學位？」
+→ {{"type": "factual"}}
+
+問題：「請推薦三個適合五年級的數學教學活動」
+→ {{"type": "open_ended"}}
+
+問題：「資工系系主任是誰？」
+→ {{"type": "factual"}}
+
+問題：「如何設計加減乘除的課程評量？」
+→ {{"type": "open_ended"}}
+
+【問題】
+{question}"""
+
+
 # Prompt for the Final LLM that synthesises the collected context into an answer.
 FINAL_GENERATION_PROMPT = """你是一個問答助手，專門給出簡短精確的答案。
 
@@ -103,6 +142,34 @@ FINAL_GENERATION_PROMPT = """你是一個問答助手，專門給出簡短精確
 問題：該實驗室是哪一年成立的？
 正確答案：該實驗室於 2015 年成立。
 錯誤答案：根據以上資料，結合多篇文件的描述，該實驗室大約在 2015 年左右成立…（過長、有引導語）
+"""
+
+# Prompt for open-ended teacher-facing questions: lesson planning, activity / resource
+# recommendations, assessment design.  Context is supplied via the chain's human
+# message (same contract as FINAL_GENERATION_PROMPT — no {context_block} placeholder).
+OPEN_ENDED_GENERATION_PROMPT = """你是協助國小教師備課的 AI 助理。使用者是現場教師，需要實用、可立即操作的內容。
+
+【任務】
+使用者的問題可能屬於：
+- 找教學資源
+- 找教學活動
+- 設計課程評量
+- 備課協助
+
+請先判斷需求類型，再用對應格式回答。
+
+【規則】
+1. 只能根據提供的參考文件回答，不可編造教材、教案或課綱條文。
+2. 答案中對應段落後標註 [編號] 引用來源，編號對應參考文件中的 `[n]` 標記。
+3. 用條列式整理，每項包含：簡短描述 + 適用年級/學科 + 來源 [編號]。
+4. 參考文件不足時，明確說明缺什麼資訊，不要捏造內容。
+5. 與教學無關的問題，禮貌拒絕並簡短說明原因。
+
+【回答格式】
+根據問題類型選擇：
+- 教學資源 / 教學活動：條列式，含簡述 + 適用年級/學科 + 引用
+- 課程評量設計：評量目標 → 題型建議 → 範例題目（含引用）
+- 備課協助：教學目標 → 建議流程 → 補充資源（含引用）
 """
 
 # --- Legacy prompts kept for backward compatibility with evaluator ---

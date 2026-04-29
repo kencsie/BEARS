@@ -14,7 +14,12 @@ from typing import List, Optional, Set
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from bears.agents.agentic_agent.prompts import FINAL_GENERATION_PROMPT, RETRIEVAL_PLANNER_PROMPT
+from bears.agents.agentic_agent.prompts import (
+    FINAL_GENERATION_PROMPT,
+    OPEN_ENDED_GENERATION_PROMPT,
+    QUESTION_TYPE_CLASSIFIER_PROMPT,
+    RETRIEVAL_PLANNER_PROMPT,
+)
 from bears.agents.base import AgentCapability, AgentResponse, BaseRAGAgent
 from bears.core.config import get_settings
 from bears.core.dependencies import get_reranker
@@ -77,16 +82,38 @@ class AgenticAgent(BaseRAGAgent):
         strategy.setdefault("use_graph", False)
         return strategy
 
-    async def _generate_final_answer(self, question: str, context_parts: List[str], llm=None) -> str:
+    async def _classify_question_type(self, question: str) -> str:
+        """Classify the question as 'factual' or 'open_ended' to pick the matching final prompt."""
+        try:
+            resp = await self._planner_llm.ainvoke(
+                QUESTION_TYPE_CLASSIFIER_PROMPT.format(question=question),
+                config={"callbacks": get_callbacks()},
+            )
+            qtype = json.loads(resp.content.strip()).get("type", "factual")
+        except Exception as e:
+            logger.warning(f"Question type classification failed, defaulting to factual: {e}")
+            return "factual"
+        return qtype if qtype in {"factual", "open_ended"} else "factual"
+
+    async def _generate_final_answer(
+        self,
+        question: str,
+        context_parts: List[str],
+        llm=None,
+        question_type: str = "factual",
+    ) -> str:
         if not context_parts:
             return "資料不足以回答。"
 
         target_llm = llm or self._final_llm
+        system_prompt = (
+            OPEN_ENDED_GENERATION_PROMPT if question_type == "open_ended" else FINAL_GENERATION_PROMPT
+        )
         combined = "\n\n---\n\n".join(context_parts)
         try:
             chain = (
                 ChatPromptTemplate.from_messages([
-                    ("system", FINAL_GENERATION_PROMPT),
+                    ("system", system_prompt),
                     ("human", "【參考文件】\n{context}\n\n【問題】\n{question}"),
                 ])
                 | target_llm
@@ -118,9 +145,12 @@ class AgenticAgent(BaseRAGAgent):
                 else self._final_llm
             )
 
-            # Phase 1a: Decide retrieval strategy
-            strategy = await self._plan_retrieval_strategy(question)
-            logger.info(f"Retrieval strategy: {strategy}")
+            # Phase 1a: Decide retrieval strategy + classify question type (in parallel)
+            strategy, question_type = await asyncio.gather(
+                self._plan_retrieval_strategy(question),
+                self._classify_question_type(question),
+            )
+            logger.info(f"Retrieval strategy: {strategy} | Question type: {question_type}")
 
             # Phase 1b: Parallel retrieval with selected engines
             pool = await _parallel_retrieve(
@@ -155,7 +185,9 @@ class AgenticAgent(BaseRAGAgent):
 
             # Phase 3: Final LLM synthesis
             gen_start = time.time()
-            answer = await self._generate_final_answer(question, context_parts, llm=final_llm)
+            answer = await self._generate_final_answer(
+                question, context_parts, llm=final_llm, question_type=question_type
+            )
             generation_time = time.time() - gen_start
 
             confidence = min(1.0, len(top_chunks) / exp.top_k) if top_chunks else 0.0
@@ -178,6 +210,7 @@ class AgenticAgent(BaseRAGAgent):
                     "completion_tokens": 0,
                     "total_tokens": 0,
                     "tools_used": [k.replace("use_", "") for k, v in strategy.items() if v],
+                    "question_type": question_type,
                     "keyword_hits": keyword_hits,
                 },
             )
