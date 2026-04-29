@@ -56,16 +56,25 @@ class KeywordRetriever:
         if self._bm25 is None or not self._docs:
             return []
         try:
-            scores = self._bm25.get_scores(list(query))
+            query_chars = list(query)
+            scores = self._bm25.get_scores(query_chars)
             top_indices = np.argsort(scores)[::-1][:k]
             out = []
             for idx in top_indices:
                 idx = int(idx)
                 if scores[idx] > 0:
+                    doc_content = self._docs[idx]["content"]
+                    seen: set = set()
+                    matched: list = []
+                    for c in query_chars:
+                        if c not in seen and c.strip() and c in doc_content:
+                            seen.add(c)
+                            matched.append(c)
                     out.append({
                         **self._docs[idx],
                         "score": float(scores[idx]),
                         "source": "keyword",
+                        "matched_tokens": "".join(matched),
                     })
             return out
         except Exception as e:
