@@ -1,95 +1,46 @@
 """
-Orchestrator graph assembly.
+Orchestrator entry point.
 
-Builds the StateGraph and provides run_orchestrated_rag() entry point.
+Router has been removed.  All queries go directly to AgenticAgent, which
+internally coordinates multi-retriever search via ComprehensiveSearchTool.
 """
 
 import logging
+import time
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from langgraph.graph import END, StateGraph
-
-from bears.agents.base import AgentResponse
-from bears.orchestrator.nodes import (
-    agentic_agent_node,
-    hybrid_agent_node,
-    kg_agent_node,
-    route_after_router,
-    router_node,
-)
-from bears.orchestrator.state import OrchestratorState
+from bears.agents.registry import get_agent
 
 logger = logging.getLogger(__name__)
 
 
-def create_orchestrator_workflow():
-    """Build the orchestrator StateGraph: router -> single agent -> END."""
-    workflow = StateGraph(OrchestratorState)
-
-    workflow.add_node("router", router_node)
-    workflow.add_node("hybrid", hybrid_agent_node)
-    workflow.add_node("kg", kg_agent_node)
-    workflow.add_node("agentic", agentic_agent_node)
-
-    workflow.set_entry_point("router")
-
-    workflow.add_conditional_edges("router", route_after_router, {
-        "hybrid": "hybrid",
-        "kg": "kg",
-        "agentic": "agentic",
-    })
-    workflow.add_edge("hybrid", END)
-    workflow.add_edge("kg", END)
-    workflow.add_edge("agentic", END)
-
-    return workflow.compile()
-
-
-_workflow = None
-
-
-def _get_workflow():
-    global _workflow
-    if _workflow is None:
-        _workflow = create_orchestrator_workflow()
-    return _workflow
-
-
-async def run_orchestrated_rag(question: str, experiment=None) -> Dict[str, Any]:
-    """Convenience entry point: run the full orchestrator pipeline."""
-    import time
-
+async def run_orchestrated_rag(
+    question: str, experiment: Optional[Any] = None
+) -> Dict[str, Any]:
+    """Run the full agentic pipeline and return a normalised result dict."""
     start_time = time.time()
     trace_id = str(uuid.uuid4())
 
-    initial_state = {
-        "question": question,
-        "route": "",
-        "route_decision": None,
-        "agent_results": [],
-        "final_answer": "",
-        "retry_count": 0,
-        "trace_id": trace_id,
-        "experiment": experiment,
-    }
-
-    workflow = _get_workflow()
-    result = await workflow.ainvoke(initial_state)
+    agent = get_agent("agentic")
+    result = await agent.run(question, experiment)
 
     total_time = time.time() - start_time
 
-    # Single agent result
-    agent_results = result.get("agent_results", [])
-    best = agent_results[0] if agent_results else AgentResponse(answer="")
-
+    meta = result.metadata or {}
     return {
         "question": question,
-        "answer": result.get("final_answer", ""),
-        "retrieved_doc_ids": best.retrieved_doc_ids,
-        "context": best.context,
+        "answer": result.answer,
+        "retrieved_doc_ids": result.retrieved_doc_ids,
+        "context": result.context,
         "trace_id": trace_id,
         "total_time": total_time,
-        "agent_used": result.get("route", "orchestrator"),
-        "confidence": best.confidence,
+        "retrieval_time": result.retrieval_time,
+        "generation_time": result.generation_time,
+        "agent_used": "agentic",
+        "confidence": result.confidence,
+        "prompt_tokens": meta.get("prompt_tokens", 0),
+        "completion_tokens": meta.get("completion_tokens", 0),
+        "total_tokens": meta.get("total_tokens", 0),
+        "tools_used": meta.get("tools_used", []),
     }

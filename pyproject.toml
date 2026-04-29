@@ -20,6 +20,7 @@ dependencies = [
     "fastapi>=0.134.0",
     "uvicorn>=0.40.0",
     "sentence-transformers>=3.0",
+    "rank-bm25>=0.2",
 ]
 
 [build-system]
