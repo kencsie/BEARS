@@ -454,3 +454,23 @@ npm run dev          # 啟動開發伺服器（http://localhost:5173）
 | **Experiments** | 建立、編輯、刪除實驗參數 YAML                                     |
 
 每題可點擊展開詳情（Question Detail Modal），顯示完整指標並支援 doc_id 展開查看 ChromaDB 原文。
+
+## CI / 自動化
+
+### Claude Code Review
+
+本 repo 啟用了 **Claude Code Review GitHub Action**，每當 PR 被開啟、更新或重新開啟時，會自動由 Claude 進行程式碼審查並在 PR 留下回饋。
+
+- **觸發時機**：`pull_request` 事件（`opened` / `synchronize` / `ready_for_review` / `reopened`）
+- **執行方式**：透過 [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) 以直接 prompt 呼叫 Claude，並透過 `--allowedTools` 明確授權 `gh pr` 子指令與 inline-comment MCP 工具
+- **驗證方式**：Pro / Max 訂閱的 OAuth Token（儲存在 repo secret `CLAUDE_CODE_OAUTH_TOKEN`）
+- **設定檔**：`.github/workflows/claude-code-review.yml`
+
+#### 審查重點
+
+Claude 會針對以下面向給出評論：
+
+- 程式碼品質與最佳實踐
+- 潛在 bug 與邊界情境
+- 安全性議題（OWASP 常見漏洞、敏感資訊外洩）
+- 效能瓶頸與資源使用
