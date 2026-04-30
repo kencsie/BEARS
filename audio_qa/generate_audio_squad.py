@@ -8,8 +8,9 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 設定
-JSON_FILE = "data/spoken_squad_100.json"
-AUDIO_DIR = "data/Spoken_SQuAD_Audio"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+JSON_FILE = os.path.join(BASE_DIR, "data", "spoken_squad_100.json")
+AUDIO_DIR = os.path.join(BASE_DIR, "data", "Spoken_SQuAD_Audio")
 
 if not os.path.exists(AUDIO_DIR):
     os.makedirs(AUDIO_DIR)

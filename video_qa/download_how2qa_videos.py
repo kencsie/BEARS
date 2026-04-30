@@ -2,11 +2,13 @@ import json
 import os
 import subprocess
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def download_videos():
-    with open('how2qa_100.json', 'r', encoding='utf-8') as f:
+    with open(os.path.join(BASE_DIR, 'data', 'how2qa_100.json'), 'r', encoding='utf-8') as f:
         data = json.load(f)
-    
-    output_dir = 'How2QA_100_Videos'
+
+    output_dir = os.path.join(BASE_DIR, 'data', 'How2QA_100_Videos')
     os.makedirs(output_dir, exist_ok=True)
     
     scripts_dir = r'C:\Miniconda3\envs\code\Scripts'

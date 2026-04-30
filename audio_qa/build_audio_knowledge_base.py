@@ -9,10 +9,11 @@ from tqdm import tqdm
 load_dotenv()
 
 # ================= 設定區 =================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = "audio_rag_db"
-COLLECTION_NAME = "audio_knowledge_base" # 重新命名為知識庫
-JSON_FILE = "data/spoken_squad_100.json"
-AUDIO_DIR = "data/Spoken_SQuAD_Audio"
+COLLECTION_NAME = "audio_knowledge_base"
+JSON_FILE = os.path.join(BASE_DIR, "data", "spoken_squad_100.json")
+AUDIO_DIR = os.path.join(BASE_DIR, "data", "Spoken_SQuAD_Audio")
 
 # 初始化
 mongo_client = MongoClient(os.getenv("MONGO_URI"))

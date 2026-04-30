@@ -1,51 +1,101 @@
-# 多模態檢索與問答專案 (Multimodal RAG)
+# Multimodal RAG 專案
 
-這個專案整理了三種不同類型的多模態檢索與問答系統：圖片 (Image)、影片 (Video) 以及音訊 (Audio)。
+三種模態的檢索增強問答系統：**圖片 (Image)**、**影片 (Video)**、**音訊 (Audio)**。  
+向量資料庫使用 **MongoDB Atlas Vector Search**，LLM 追蹤使用 **Langfuse**。
 
-## 專案目錄結構
+---
 
-```text
-/multimodal
-  /image_qa          # 圖片檢索與問答 (InfoQA)
-    /data            # 存放圖片資料與 Ground Truth
-    run_4_strategies.py  # 評測四種圖片檢索策略的腳本
-  /video_qa          # 影片檢索與問答 (How2QA)
-    /data            # 存放影片檔案 (.mp4) 與 JSON 標籤
-    build_how2qa_db.py       # 建立影片片段向量資料庫
-    build_enriched_how2qa.py # 產生增強後的問答資料
-    how2qa_eval.py           # 影片 RAG 效能評測
-    download_how2qa_videos.py # 下載範例影片
-  /audio_qa          # 音訊檢索與問答 (Spoken SQuAD)
-    /data            # 存放音訊檔案 (.mp3) 與 JSON 資料集
-    build_audio_rag_db.py    # 建立音訊向量資料庫
-    audio_rag_search.py      # 自動化評測音訊檢索
-    audio_search_tool.py     # 搜尋工具介面
-    generate_audio_squad.py  # 使用 TTS 產生音訊檔案
-  /utils             # 共用工具與模組
-    DB.py            # 資料庫操作
-    RAG.py           # RAG 核心邏輯
-  .env               # 環境變數設定 (API Keys, Mongo URI)
+## 專案結構
+
+```
+multimodal/
+├── image_qa/
+│   ├── build_image_db.py           # 建立圖片知識庫（OCR + VLM + CLIP → MongoDB）
+│   ├── run_hybrid_rerank.py        # 評測腳本（Hybrid + LLM Rerank，命中率 84%）
+│   ├── rag_eval_hybrid_rerank.csv  # 評測結果
+│   └── data/
+│       └── infographic_rag_data_strict/  # 100 張圖片 + ground_truth_en.json
+│
+├── video_qa/
+│   ├── download_how2qa_videos.py   # 下載 How2QA 影片片段
+│   ├── build_how2qa_db.py          # 建立影片片段向量資料庫（Whisper + VLM + CLIP）
+│   ├── build_enriched_how2qa.py    # 產生增強問答資料並存入 DB
+│   ├── how2qa_eval.py              # 評測腳本（Hybrid + Query Expansion + Rerank）
+│   ├── how2qa_rewritten_results.csv  # 評測結果
+│   └── data/
+│       ├── how2qa_100.json             # 原始 100 筆問答
+│       ├── how2qa_100_enriched.json    # 增強後問答（含 enriched_question）
+│       ├── how2qa_100_rewritten.json   # 改寫後問答（含 rewritten_question）
+│       └── How2QA_100_Videos/          # 100 支 .mp4 影片片段
+│
+├── audio_qa/
+│   ├── generate_audio_squad.py        # TTS 產生 .mp3 音訊檔
+│   ├── build_audio_rag_db.py          # 建立音訊向量資料庫（Embedding → MongoDB）
+│   ├── build_audio_knowledge_base.py  # 建立音訊知識庫（含 base64 音訊）
+│   ├── audio_rag_search.py            # 評測腳本（Semantic Search）
+│   ├── audio_search_tool.py           # 互動式搜尋介面
+│   ├── audio_rag_full_eval.csv        # 評測結果
+│   └── data/
+│       ├── spoken_squad_100.json      # 100 筆英文問答資料
+│       └── Spoken_SQuAD_Audio/        # 100 個 .mp3 音訊檔
+│
+└── .env                               # API Keys 設定
 ```
 
-## 各子專案說明
+---
 
-### 1. 圖片檢索 (Image QA)
-*   **資料集**: Infographic RAG Data.
-*   **技術**: 使用 OpenAI CLIP 進行文搜圖，並結合 GPT-4o-mini 進行 OCR 與影像描述。
-*   **主要腳本**: `image_qa/run_4_strategies.py` - 比較 Hybrid Search、Visual Search 等不同策略。
+## 資料庫狀態
 
-### 2. 影片檢索 (Video QA)
-*   **資料集**: How2QA (100 支影片).
-*   **技術**: 將影片切分為片段，使用 Whisper 轉錄語音，並用 GPT-4o-mini Vision 產生畫面描述。
-*   **主要腳本**: `video_qa/how2qa_eval.py` - 評測影片片段的檢索精準度。
+| 模態 | MongoDB DB | Collection | 狀態 |
+|------|-----------|------------|------|
+| Image QA | `infographic_rag_strict_db` | `strict_data` | ✅ 已建置完成 |
+| Video QA | `how2qa_enriched_db` | `video_segments` | ✅ 已建置完成 |
+| Audio QA | `audio_rag_db` | `audio_knowledge_base` | ✅ 已建置完成 |
 
-### 3. 音訊檢索 (Audio QA)
-*   **資料集**: Spoken SQuAD.
-*   **技術**: 將文本轉換為音訊 (TTS)，使用 OpenAI Embedding 進行語意搜尋。
-*   **主要腳本**: `audio_qa/audio_rag_search.py` - 測試音訊背景下的問答命中率。
+> 若需重建，執行各模組的 `build_*.py` 腳本。重建前建議先清空對應的 MongoDB Collection。
 
-## 如何開始
+---
 
-1.  請確保根目錄下的 `.env` 檔案已正確設定 `OPENAI_API_KEY` 與 `MONGO_URI`。
-2.  進入各個子目錄後，即可執行對應的腳本。
-3.  範例：`cd image_qa`, `python run_4_strategies.py`
+## 評測結果
+
+| 模態 | 策略 | 命中率 |
+|------|------|--------|
+| Image QA | Hybrid（文字 + CLIP）+ LLM Rerank | **84%** |
+| Video QA | Hybrid（OpenAI + CLIP）+ Query Expansion + LLM Rerank | **Accuracy 72% / Top-10 Recall 90%** |
+| Audio QA | Semantic Search（text-embedding-3-small） | **75%** |
+
+---
+
+## 環境設定
+
+**Python 環境**：`C:\Miniconda3\envs\code\python.exe`（Python 3.11）
+
+**`.env` 必要欄位**：
+```env
+OPENAI_API_KEY=sk-...
+MONGO_URI=mongodb+srv://...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+---
+
+## 執行方式
+
+所有腳本使用 `__file__` 相對路徑，**可在任意目錄下執行**，不需要 `cd` 進子資料夾。
+
+```bash
+# 評測
+python image_qa/run_hybrid_rerank.py
+python video_qa/how2qa_eval.py
+python audio_qa/audio_rag_search.py
+
+# 互動式音訊搜尋
+python audio_qa/audio_search_tool.py
+
+# 重建資料庫（通常不需要，DB 已建置完成）
+python image_qa/build_image_db.py
+python video_qa/build_enriched_how2qa.py
+python audio_qa/build_audio_knowledge_base.py
+```

@@ -13,7 +13,8 @@ from transformers import CLIPProcessor, CLIPModel
 from tqdm import tqdm
 
 # ================= 設定區 =================
-VIDEO_DIR = "data/How2QA_100_Videos"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VIDEO_DIR = os.path.join(BASE_DIR, "data", "How2QA_100_Videos")
 DB_NAME = "how2qa_rag_db"
 COLLECTION_NAME = "video_segments"
 FFMPEG_PATH = r"C:\Miniconda3\envs\code\Lib\site-packages\static_ffmpeg\bin\win32\ffmpeg.exe"

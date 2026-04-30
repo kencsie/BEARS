@@ -35,10 +35,11 @@ clip_model = CLIPModel.from_pretrained(clip_model_name).to(device)
 clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
 
 # Config
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FFMPEG_PATH = r"C:\Miniconda3\envs\code\Lib\site-packages\static_ffmpeg\bin\win32\ffmpeg.exe"
-INPUT_DIR = "data/How2QA_100_Videos"
-INPUT_JSON = "data/how2qa_100.json"
-OUTPUT_JSON = "data/how2qa_100_enriched.json"
+INPUT_DIR = os.path.join(BASE_DIR, "data", "How2QA_100_Videos")
+INPUT_JSON = os.path.join(BASE_DIR, "data", "how2qa_100.json")
+OUTPUT_JSON = os.path.join(BASE_DIR, "data", "how2qa_100_enriched.json")
 MONGO_URI = os.getenv("MONGO_URI")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 

@@ -18,12 +18,13 @@ except ImportError:
 load_dotenv(find_dotenv())
 
 # Config
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MONGO_URI = os.getenv("MONGO_URI")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DB_NAME = "how2qa_enriched_db"
 COLLECTION_NAME = "video_segments"
-INPUT_JSON = "data/how2qa_100_rewritten.json"
-OUTPUT_CSV = "how2qa_rewritten_results.csv"
+INPUT_JSON = os.path.join(BASE_DIR, "data", "how2qa_100_rewritten.json")
+OUTPUT_CSV = os.path.join(BASE_DIR, "how2qa_rewritten_results.csv")
 
 # Clients
 lf_client = LangfuseOpenAI(api_key=OPENAI_API_KEY)

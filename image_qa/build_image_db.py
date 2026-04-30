@@ -12,8 +12,8 @@ from tqdm import tqdm
 from langfuse import observe, get_client   # Langfuse v4 API
 
 # ================= 設定區 =================
-# 1. 圖片資料夾
-IMAGE_FOLDER = "infographic_rag_data_strict"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGE_FOLDER = os.path.join(BASE_DIR, "data", "infographic_rag_data_strict")
 
 # 2. 資料庫設定
 DB_NAME = "infographic_rag_strict_db"

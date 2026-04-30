@@ -11,11 +11,12 @@ from langfuse import observe, get_client
 from transformers import CLIPProcessor, CLIPModel
 
 # ================= 設定區 =================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = "infographic_rag_strict_db"
-COLLECTION_NAME = "strict_data" 
+COLLECTION_NAME = "strict_data"
 
-JSON_FILE = "data/infographic_rag_data_strict/ground_truth_en.json"
-IMAGE_FOLDER = "data/infographic_rag_data_strict"
+JSON_FILE = os.path.join(BASE_DIR, "data", "infographic_rag_data_strict", "ground_truth_en.json")
+IMAGE_FOLDER = os.path.join(BASE_DIR, "data", "infographic_rag_data_strict")
 
 # ================= 環境初始化 =================
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -90,16 +91,6 @@ def get_clip_text_embedding(text):
     except Exception as e:
         print(f"\n⚠️ CLIP 錯誤: {e}")
         return []
-
-@observe(name="vector-search")
-def perform_single_vector_search(vector, path, limit=10):
-    """執行單一向量搜尋"""
-    if not vector: return []
-    pipeline = [
-        {"$vectorSearch": {"index": "vector_index", "path": path, "queryVector": vector, "numCandidates": 100, "limit": limit}},
-        {"$project": {"_id": 0, "filename": 1, "ocr_text": 1, "vlm_description": 1, "score": {"$meta": "vectorSearchScore"}}}
-    ]
-    return list(collection.aggregate(pipeline))
 
 @observe(name="hybrid-vector-search")
 def perform_hybrid_vector_search(vec1, path1, vec2, path2, limit=10):
@@ -208,45 +199,23 @@ def process_question(item, results):
     gt_ans = item['answer']
     gt_img = item['source_filename']
     qid = item['id']
-    
-    # 1. 計算兩種基礎向量
+
     vec_semantic = get_text_embedding(q_text)
     vec_visual   = get_clip_text_embedding(q_text)
-    
-    # 2. 進行 RAG 的兩大核心搜尋：取得前 10 名
-    # 第一種: 用文搜圖加上 OCR (及 VLM) 文字 hybrid
-    # 注意：新 DB 中，整合的文本向量欄位叫做 'embedding'
-    res_hybrid = perform_hybrid_vector_search(vec_semantic, "embedding", vec_visual, "image_vector", limit=10)
-    
-    # 第二種: 純用文搜圖 (Visual)
-    res_visual = perform_single_vector_search(vec_visual, "image_vector", limit=10)
-    
-    # 3. 處理四種策略結果
-    ans_hybrid = res_hybrid[0]['filename'] if res_hybrid else "Not Found"
-    ans_visual = res_visual[0]['filename'] if res_visual else "Not Found"
-    
-    ans_hybrid_rerank = llm_rerank(q_text, res_hybrid[:5]) if res_hybrid else "Not Found"
-    ans_visual_rerank = llm_rerank(q_text, res_visual[:5]) if res_visual else "Not Found"
-    
-    # 統一產生 RAG 回答並填入紀錄表
-    def evaluate(best_filename, strat_name):
-        ai_ans = generate_rag_answer(q_text, best_filename)
-        is_hit = (best_filename == gt_img)
-        
-        results[strat_name].append({
-            "ID": qid,
-            "Question": q_text,
-            "GT Answer": gt_ans,
-            "GT Image": gt_img,
-            "Retrieved Image": best_filename,
-            "Hit": is_hit,
-            "AI Answer": ai_ans
-        })
 
-    evaluate(ans_hybrid, "Hybrid")
-    evaluate(ans_visual, "Visual")
-    evaluate(ans_visual_rerank, "Visual_Rerank")
-    evaluate(ans_hybrid_rerank, "Hybrid_Rerank")
+    candidates = perform_hybrid_vector_search(vec_semantic, "embedding", vec_visual, "image_vector", limit=10)
+    best_filename = llm_rerank(q_text, candidates[:5]) if candidates else "Not Found"
+    ai_ans = generate_rag_answer(q_text, best_filename)
+
+    results.append({
+        "ID": qid,
+        "Question": q_text,
+        "GT Answer": gt_ans,
+        "GT Image": gt_img,
+        "Retrieved Image": best_filename,
+        "Hit": (best_filename == gt_img),
+        "AI Answer": ai_ans
+    })
 
 
 def main():
@@ -254,38 +223,22 @@ def main():
 
     with open(JSON_FILE, "r", encoding="utf-8") as f:
         qa_data = json.load(f)
-    
-    # 定義 4 種策略
-    results = {
-        "Hybrid": [],
-        "Visual": [],
-        "Visual_Rerank": [],
-        "Hybrid_Rerank": []
-    }
-    
-    print(f"🚀 開始評測 {len(qa_data)} 題 x 4 種策略...")
-    
+
+    results = []
+    print(f"開始評測 {len(qa_data)} 題 (Hybrid + Rerank)...")
+
     for item in tqdm(qa_data, desc="評測進度"):
         process_question(item, results)
-        
-    get_client().flush() # 強制送出 Langfuse 事件
 
-    # 4. 輸出 CSV 檔案
-    print("\n💾 正在儲存 CSV 檔案...")
-    for name, data in results.items():
-        if not data: continue 
-            
-        df = pd.DataFrame(data)
-        filename = f"rag_eval_4strats_{name.lower()}.csv"
-        
-        cols = ["ID", "Question", "GT Answer", "GT Image", "Retrieved Image", "Hit", "AI Answer"]
-        df = df[cols]
-        df.to_csv(filename, index=False, encoding="utf-8-sig")
-        
-        hit_rate = df["Hit"].mean()
-        print(f"   📄 {filename} (命中率: {hit_rate:.1%})")
+    get_client().flush()
 
-    print("\n🎉 全部完成！")
+    df = pd.DataFrame(results)
+    cols = ["ID", "Question", "GT Answer", "GT Image", "Retrieved Image", "Hit", "AI Answer"]
+    df = df[cols]
+    output_path = os.path.join(BASE_DIR, "rag_eval_hybrid_rerank.csv")
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    print(f"命中率: {df['Hit'].mean():.1%}")
+    print(f"結果儲存至: {output_path}")
 
 if __name__ == "__main__":
     main()

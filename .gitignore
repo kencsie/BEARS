@@ -1,6 +1,9 @@
 # API Keys (CRITICAL!)
 .env
 
+# Claude Code internal files
+.claude/
+
 # Python folders
 __pycache__/
 *.py[cod]
