@@ -1,0 +1,35 @@
+# API Keys (CRITICAL!)
+.env
+
+# Python folders
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Large Video & Image Data (Not suitable for GitHub)
+How2QA_100_Videos/
+infographic_rag_data_strict/
+infographic_rag_data/
+MSVD_100_Videos/
+Video_CoT_100_Videos/
+Video_CoT_100_Videos_Smart_Lite/
+tgif-qa/
+300題/
+VideoQA/
+
+# Large Datasets & Binary files
+*.zip
+*.mp4
+*.mp3
+*.jpg
+*.png
+*.csv
+dl.log
+
+# Temp folders
+temp_process/
+.tempmediaStorage/
+沒用的/
