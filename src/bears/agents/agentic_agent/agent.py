@@ -8,13 +8,19 @@ synthesis run in a single pass — no multi-turn LLM coordination loop.
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import List, Optional, Set
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from bears.agents.agentic_agent.prompts import FINAL_GENERATION_PROMPT, RETRIEVAL_PLANNER_PROMPT
+from bears.agents.agentic_agent.prompts import (
+    FINAL_GENERATION_PROMPT,
+    OPEN_ENDED_GENERATION_PROMPT,
+    QUESTION_TYPE_CLASSIFIER_PROMPT,
+    RETRIEVAL_PLANNER_PROMPT,
+)
 from bears.agents.base import AgentCapability, AgentResponse, BaseRAGAgent
 from bears.core.config import get_settings
 from bears.core.dependencies import get_reranker
@@ -23,6 +29,14 @@ from bears.core.langfuse_helper import get_callbacks
 from bears.tools.comprehensive_search import _format_chunks, _parallel_retrieve
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_json_object(raw: str) -> dict:
+    """Extract the first JSON object from an LLM response, tolerating markdown fences."""
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not match:
+        raise ValueError(f"no JSON object found in response: {raw!r}")
+    return json.loads(match.group(0))
 
 
 class AgenticAgent(BaseRAGAgent):
@@ -42,6 +56,9 @@ class AgenticAgent(BaseRAGAgent):
             api_key=settings.OPENAI_API_KEY,
             temperature=0.3,
         )
+        # Shared lightweight LLM for both retrieval planning and question-type
+        # classification — both are short JSON-only decisions where gpt-4o-mini
+        # is good enough and cheap. Intentionally reused; do not duplicate.
         self._planner_llm = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=settings.OPENAI_API_KEY,
@@ -64,12 +81,13 @@ class AgenticAgent(BaseRAGAgent):
         """Ask a lightweight LLM to decide which retrievers to activate for this query."""
         try:
             resp = await self._planner_llm.ainvoke(
-                RETRIEVAL_PLANNER_PROMPT.format(question=question),
+                RETRIEVAL_PLANNER_PROMPT.replace("{question}", question),
                 config={"callbacks": get_callbacks()},
             )
-            strategy = json.loads(resp.content.strip())
-        except Exception as e:
-            logger.warning(f"Retrieval planning failed, using default strategy: {e}")
+            logger.debug("Retrieval planner raw response: %r", resp.content)
+            strategy = _extract_json_object(resp.content)
+        except Exception:
+            logger.warning("Retrieval planning failed, using default strategy", exc_info=True)
             strategy = {}
         # vector is always mandatory
         strategy["use_vector"] = True
@@ -77,16 +95,41 @@ class AgenticAgent(BaseRAGAgent):
         strategy.setdefault("use_graph", False)
         return strategy
 
-    async def _generate_final_answer(self, question: str, context_parts: List[str], llm=None) -> str:
+    async def _classify_question_type(self, question: str) -> str:
+        """Classify the question as 'factual' or 'open_ended' to pick the matching final prompt."""
+        try:
+            resp = await self._planner_llm.ainvoke(
+                QUESTION_TYPE_CLASSIFIER_PROMPT.replace("{question}", question),
+                config={"callbacks": get_callbacks()},
+            )
+            logger.debug("Question type classifier raw response: %r", resp.content)
+            qtype = _extract_json_object(resp.content).get("type", "factual")
+        except Exception:
+            logger.warning(
+                "Question type classification failed, defaulting to factual", exc_info=True
+            )
+            return "factual"
+        return qtype if qtype in {"factual", "open_ended"} else "factual"
+
+    async def _generate_final_answer(
+        self,
+        question: str,
+        context_parts: List[str],
+        llm=None,
+        question_type: str = "factual",
+    ) -> str:
         if not context_parts:
             return "資料不足以回答。"
 
         target_llm = llm or self._final_llm
+        system_prompt = (
+            OPEN_ENDED_GENERATION_PROMPT if question_type == "open_ended" else FINAL_GENERATION_PROMPT
+        )
         combined = "\n\n---\n\n".join(context_parts)
         try:
             chain = (
                 ChatPromptTemplate.from_messages([
-                    ("system", FINAL_GENERATION_PROMPT),
+                    ("system", system_prompt),
                     ("human", "【參考文件】\n{context}\n\n【問題】\n{question}"),
                 ])
                 | target_llm
@@ -118,9 +161,12 @@ class AgenticAgent(BaseRAGAgent):
                 else self._final_llm
             )
 
-            # Phase 1a: Decide retrieval strategy
-            strategy = await self._plan_retrieval_strategy(question)
-            logger.info(f"Retrieval strategy: {strategy}")
+            # Phase 1a: Decide retrieval strategy + classify question type (in parallel)
+            strategy, question_type = await asyncio.gather(
+                self._plan_retrieval_strategy(question),
+                self._classify_question_type(question),
+            )
+            logger.info(f"Retrieval strategy: {strategy} | Question type: {question_type}")
 
             # Phase 1b: Parallel retrieval with selected engines
             pool = await _parallel_retrieve(
@@ -155,7 +201,9 @@ class AgenticAgent(BaseRAGAgent):
 
             # Phase 3: Final LLM synthesis
             gen_start = time.time()
-            answer = await self._generate_final_answer(question, context_parts, llm=final_llm)
+            answer = await self._generate_final_answer(
+                question, context_parts, llm=final_llm, question_type=question_type
+            )
             generation_time = time.time() - gen_start
 
             confidence = min(1.0, len(top_chunks) / exp.top_k) if top_chunks else 0.0
@@ -178,6 +226,7 @@ class AgenticAgent(BaseRAGAgent):
                     "completion_tokens": 0,
                     "total_tokens": 0,
                     "tools_used": [k.replace("use_", "") for k, v in strategy.items() if v],
+                    "question_type": question_type,
                     "keyword_hits": keyword_hits,
                 },
             )
