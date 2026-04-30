@@ -8,6 +8,7 @@ synthesis run in a single pass — no multi-turn LLM coordination loop.
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import List, Optional, Set
 
@@ -30,6 +31,14 @@ from bears.tools.comprehensive_search import _format_chunks, _parallel_retrieve
 logger = logging.getLogger(__name__)
 
 
+def _extract_json_object(raw: str) -> dict:
+    """Extract the first JSON object from an LLM response, tolerating markdown fences."""
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not match:
+        raise ValueError(f"no JSON object found in response: {raw!r}")
+    return json.loads(match.group(0))
+
+
 class AgenticAgent(BaseRAGAgent):
     """Single-pass RAG agent.
 
@@ -47,6 +56,9 @@ class AgenticAgent(BaseRAGAgent):
             api_key=settings.OPENAI_API_KEY,
             temperature=0.3,
         )
+        # Shared lightweight LLM for both retrieval planning and question-type
+        # classification — both are short JSON-only decisions where gpt-4o-mini
+        # is good enough and cheap. Intentionally reused; do not duplicate.
         self._planner_llm = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=settings.OPENAI_API_KEY,
@@ -69,12 +81,13 @@ class AgenticAgent(BaseRAGAgent):
         """Ask a lightweight LLM to decide which retrievers to activate for this query."""
         try:
             resp = await self._planner_llm.ainvoke(
-                RETRIEVAL_PLANNER_PROMPT.format(question=question),
+                RETRIEVAL_PLANNER_PROMPT.replace("{question}", question),
                 config={"callbacks": get_callbacks()},
             )
-            strategy = json.loads(resp.content.strip())
-        except Exception as e:
-            logger.warning(f"Retrieval planning failed, using default strategy: {e}")
+            logger.debug("Retrieval planner raw response: %r", resp.content)
+            strategy = _extract_json_object(resp.content)
+        except Exception:
+            logger.warning("Retrieval planning failed, using default strategy", exc_info=True)
             strategy = {}
         # vector is always mandatory
         strategy["use_vector"] = True
@@ -86,12 +99,15 @@ class AgenticAgent(BaseRAGAgent):
         """Classify the question as 'factual' or 'open_ended' to pick the matching final prompt."""
         try:
             resp = await self._planner_llm.ainvoke(
-                QUESTION_TYPE_CLASSIFIER_PROMPT.format(question=question),
+                QUESTION_TYPE_CLASSIFIER_PROMPT.replace("{question}", question),
                 config={"callbacks": get_callbacks()},
             )
-            qtype = json.loads(resp.content.strip()).get("type", "factual")
-        except Exception as e:
-            logger.warning(f"Question type classification failed, defaulting to factual: {e}")
+            logger.debug("Question type classifier raw response: %r", resp.content)
+            qtype = _extract_json_object(resp.content).get("type", "factual")
+        except Exception:
+            logger.warning(
+                "Question type classification failed, defaulting to factual", exc_info=True
+            )
             return "factual"
         return qtype if qtype in {"factual", "open_ended"} else "factual"
 
