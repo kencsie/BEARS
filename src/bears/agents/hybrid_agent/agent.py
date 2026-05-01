@@ -134,15 +134,21 @@ class HybridRAGAgent(BaseRAGAgent):
             context_str += f"[{i + 1}] (來源: {source}):\n{ctx['content']}\n\n"
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant that answers questions in Traditional Chinese."),
-            ("human", """你是一個專業的繁體中文問答助手。請根據以下的參考資訊回答使用者的問題。
-如果參考資訊不足以回答，請說「根據提供的資訊無法回答此問題」。請勿編造事實。
+            ("system", """你是一個專業的繁體中文問答助手。請根據【參考文件】回答【使用者問題】。
 
-參考資訊：
+回答原則:
+1. 僅依據【參考文件】內容回答,不得引用任何先驗知識或自行編造事實。
+2. 回答時請以 [來源 i] 標註所引用的文件編號(對應參考文件清單中的 [i])。
+3. 對於事實性問題,請精簡作答(常為一兩個詞或一句話),不需要冗長解釋。
+4. 若【參考文件】中完全沒有可用線索,僅輸出:「根據提供的資訊無法回答此問題」,並簡述缺少哪類資訊。
+5. 全程使用繁體中文回答。"""),
+            ("human", """【參考文件】
 {context}
 
-使用者問題：{question}
-請提供完整且有條理的回答："""),
+【使用者問題】
+{question}
+
+請依據上述原則作答:"""),
         ])
 
         try:
