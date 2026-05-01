@@ -1,83 +1,97 @@
-# BEARS — Router-Guided Agentic RAG Orchestrator
+# BEARS — Agentic RAG System
 
-BEARS 是一個多 Agent RAG（Retrieval-Augmented Generation）系統。透過 LLM Router 分析使用者問題，動態調度不同 RAG Agent，最後由 Orchestrator 回傳最佳答案。
+BEARS 是一個基於 **單一 Agentic RAG 管線** 的問答系統。每個請求由 `AgenticAgent` 統一處理：先由輕量 LLM 決定啟用哪些檢索引擎，接著並行執行 Vector / BM25 / Graph 搜尋，最後以 Cross-Encoder 重排序後生成答案。
 
 ## 架構總覽
 
-```
-User Question
-      │
-      ▼
-┌──────────┐
-│  Router   │  ← LLM 分類意圖，選擇最適合的單一 Agent
-└────┬─────┘
-     │  route to best agent
-     ▼
-┌─────────┐  ┌──────────┐  ┌───────────┐
-│ Hybrid  │  │    KG    │  │  Agentic  │   ← 各 Agent 獨立 retrieve + generate
-└────┬────┘  └────┬─────┘  └─────┬─────┘
-     │            │              │
-     └────────────┼──────────────┘
-                  ▼
-            Final Answer
+```mermaid
+flowchart TD
+    Q(["User Question"])
+
+    subgraph AGENT["AgenticAgent"]
+        subgraph P1A["Phase 1a — 並行 LLM 分析"]
+            direction LR
+            RP["Retrieval Planner<br/>gpt-4o-mini<br/>決定啟用哪些搜尋引擎"]
+            QC["Question Type Classifier<br/>gpt-4o-mini<br/>factual / open_ended"]
+        end
+
+        subgraph P1B["Phase 1b — 並行搜尋"]
+            direction LR
+            V["Vector<br/>ChromaDB・必選"]
+            K["Keyword<br/>BM25・選填"]
+            G["Graph<br/>Neo4j・選填"]
+        end
+
+        RK["Phase 2 — Cross-Encoder Reranker<br/>BAAI/bge-reranker-v2-m3<br/>Chunk Pool 去重排序 → Top-K"]
+
+        SY["Phase 3 — Final LLM Synthesis<br/>gpt-4o-mini<br/>factual prompt ／ open_ended prompt"]
+    end
+
+    ANS(["Final Answer"])
+
+    Q --> P1A
+    RP --> P1B
+    V & K & G --> RK
+    RK --> SY
+    QC -. question_type .-> SY
+    SY --> ANS
 ```
 
 ## 目錄結構
 
 ```
 BEARS/
-├── src/bears/                      # 主要套件
-│   ├── core/                       # 系統設定 + 實驗參數
-│   │   ├── config.py               #   Pydantic Settings + .env（secrets）
-│   │   ├── experiment.py           #   Pydantic BaseModel + YAML（實驗參數）
-│   │   └── langfuse_helper.py      #   Langfuse observability
-│   ├── database/                   # 資料層
-│   │   ├── vector/                 #   ChromaDB 向量儲存 + 資料載入
-│   │   │   ├── vector_store.py     #     ChromaDB 連線 + CRUD
-│   │   │   └── vector_builder.py   #     載入 corpus → 建立向量 DB
-│   │   └── graph/                  #   Neo4j 圖譜儲存 + 建構
-│   │       ├── graph_store.py      #     Neo4j 連線 + CRUD
-│   │       └── graph_builder.py    #     LLM 實體抽取 → 建立圖譜
-│   ├── router/                     # 路由層
-│   │   ├── base.py                 #   BaseRouter ABC + RouterOutput
-│   │   └── llm_router.py          #   GPT-4o-mini 分類路由
-│   ├── agents/                     # Agent 層
-│   │   ├── base.py                 #   BaseRAGAgent ABC + AgentResponse
-│   │   ├── registry.py             #   Agent 註冊表（動態 import）
-│   │   ├── hybrid_agent/           #   向量搜尋 + 多查詢擴展 + RRF 融合
-│   │   ├── kg_agent/               #   知識圖譜 5 節點 pipeline
-│   │   ├── agentic_agent/          #   多步驟迭代檢索
-│   │   └── multimodal_agent/       #   Stub（未來擴充）
-│   ├── orchestrator/               # 編排層（LangGraph StateGraph）
-│   │   ├── state.py                #   OrchestratorState
-│   │   ├── nodes.py                #   router / agent wrapper 節點
-│   │   └── graph.py                #   StateGraph 組裝 + 入口函式
-│   ├── api/                        # Web API（FastAPI）
-│   │   ├── api.py                  #   FastAPI 應用入口
-│   │   └── routes/                 #   API 路由模組
-│   │       ├── evaluation.py       #     評估相關 endpoints
-│   │       ├── documents.py        #     文件查詢 endpoint
-│   │       └── experiments.py      #     實驗參數 CRUD
-│   └── evaluation/                 # 評估系統
-│       ├── schemas.py              #   SourceMetrics, QuestionDetail
-│       ├── metrics.py              #   Hit Rate, MRR, MAP
-│       ├── evaluator.py            #   AgentEvaluator + OrchestratorEvaluator
-│       └── cli.py                  #   CLI 入口（bears-eval）
-├── frontend/                       # 前端 Dashboard（React + Vite）
+├── src/bears/                         # 主要套件
+│   ├── core/                          # 系統設定 + 實驗參數
+│   │   ├── config.py                  #   Pydantic Settings（.env secrets）
+│   │   ├── experiment.py              #   Pydantic BaseModel（YAML 實驗參數）
+│   │   ├── dependencies.py            #   Singleton 容器（VectorStore / Reranker）
+│   │   └── langfuse_helper.py         #   Langfuse observability（選填）
+│   ├── database/                      # 資料層
+│   │   ├── vector/                    #   ChromaDB 向量儲存
+│   │   │   ├── vector_store.py        #     ChromaDB 連線 + CRUD
+│   │   │   └── vector_builder.py      #     載入 corpus → 建立向量 DB
+│   │   └── graph/                     #   Neo4j 圖譜儲存
+│   │       ├── graph_store.py         #     Neo4j 連線 + CRUD
+│   │       └── graph_builder.py       #     LLM 實體抽取 → 建立圖譜
+│   ├── tools/                         # 搜尋工具層
+│   │   ├── atomic/                    #   原子搜尋器（各自獨立、可並行）
+│   │   │   ├── vector_retriever.py    #     ChromaDB 語義搜尋
+│   │   │   ├── keyword_retriever.py   #     BM25 關鍵字搜尋（中英字符切分）
+│   │   │   └── graph_retriever.py     #     Neo4j 圖譜搜尋
+│   │   ├── comprehensive_search.py    #   並行調度 + 去重（ComprehensiveSearchTool）
+│   │   └── reranker.py                #   CrossEncoderReranker（BAAI/bge-reranker-v2-m3）
+│   ├── generators/                    # 生成器層（可插拔 domain generator）
+│   │   ├── base.py                    #   BaseGenerator ABC
+│   │   └── educational.py             #   EducationalGenerator（國小教師備課）
+│   ├── agents/                        # Agent 層
+│   │   ├── base.py                    #   BaseRAGAgent ABC + AgentResponse
+│   │   ├── registry.py                #   Agent 註冊表（動態 import）
+│   │   └── agentic_agent/             #   主要 Agent（單程管線）
+│   │       ├── agent.py               #     AgenticAgent 實作
+│   │       └── prompts.py             #     Retrieval Planner / Final Generation prompts
+│   ├── orchestrator/                  # 編排層（輕量入口）
+│   │   └── graph.py                   #   run_orchestrated_rag()：呼叫 AgenticAgent
+│   └── api/                           # Web API（FastAPI）
+│       ├── api.py                     #   FastAPI 應用入口（含 lifespan preload）
+│       ├── schemas.py                 #   Request / Response Pydantic 模型
+│       └── routes/                    #   API 路由
+│           ├── query.py               #     /retrieve、/generate、/evaluate、/history、/health
+│           ├── documents.py           #     /api/docs/{doc_id}
+│           └── experiments.py         #     /api/experiments CRUD
+├── frontend/                          # 前端（React + Vite）
 │   └── src/
-│       ├── components/             #   共用元件（Modal、Table）
-│       ├── pages/                  #   頁面（Dashboard、History、EvalResult、Experiments）
-│       ├── services/               #   API 封裝（axios）
-│       └── utils/                  #   工具函數
-├── scripts/                        # 工具腳本
-│   └── build_db.py                 #   建立向量 + 圖譜資料庫
-├── experiments/                    # 實驗參數 YAML（進 git）
+│       ├── pages/                     #   Chatbot、EvalBatch 兩頁
+│       └── services/                  #   api.js（axios 封裝）
+├── scripts/
+│   └── build_db.py                    #   建立向量 + 圖譜資料庫
+├── experiments/                       # 實驗參數 YAML（進 git）
 │   └── default.yaml
-├── data/                           # 資料
-│   ├── corpus.json                 #   ~4200 篇文件（drcd / hotpotqa / 2wiki）
-│   ├── queries.json                #   ~647 題評估問題
-│   └── chroma_db_corpus/           #   ChromaDB 持久化資料
-├── output/                         # 評估結果輸出（不進 git）
+├── data/                              # 資料
+│   ├── corpus.json                    #   ~4200 篇文件
+│   ├── queries.json                   #   ~647 題評估問題
+│   └── chroma_db_corpus/              #   ChromaDB 持久化資料
+├── output/                            # 評估結果輸出（不進 git）
 ├── pyproject.toml
 └── .env.example
 ```
@@ -89,19 +103,18 @@ BEARS/
 - Python >= 3.11
 - [uv](https://docs.astral.sh/uv/)（套件管理器）
 - OpenAI API Key
-- Neo4j 資料庫（KG Agent 需要）
+- Neo4j 資料庫（Graph 搜尋需要，可選用）
 
 ### 1. 安裝
 
 ```bash
 git clone <repo-url> && cd BEARS
-git checkout dev
 
 # 安裝所有依賴
 uv sync
 ```
 
-### 2. 設定 Neo4j（KG Agent 需要）
+### 2. 設定 Neo4j（Graph 搜尋需要）
 
 #### 2.1 下載 Neo4j Desktop
 
@@ -189,6 +202,8 @@ LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_HOST=https://us.cloud.langfuse.com
 ```
 
+> **Note**：若不需要 Graph 搜尋，可跳過步驟 2，`NEO4J_*` 留空；系統啟動時 `GraphStoreManager` 會連線失敗但不影響 Vector + BM25 管線運作。
+
 ### 5. 建立向量資料庫
 
 ```bash
@@ -207,78 +222,22 @@ uv run python scripts/build_db.py --limit 100
 
 ## 使用方式
 
-### CLI 評估（主要流程）
+### 啟動 API Server + 前端
 
 ```bash
-# 測試指令（十筆資料）
-uv run bears-eval --agent hybrid --limit 10 --output output/hybrid.json --detailed
-uv run bears-eval --agent kg --limit 10 --output output/kg.json --detailed
-uv run bears-eval --agent agentic --limit 10 --output output/agentic.json --detailed
-uv run bears-eval --orchestrator --limit 10 --output output/orchestrator.json
+# 後端（FastAPI，port 8005）
+uv run uvicorn bears.api.api:app --reload --port 8005
 
-# 評估單一 agent
-uv run bears-eval --agent hybrid
-uv run bears-eval --agent kg
-uv run bears-eval --agent agentic
-
-# 指定實驗參數
-uv run bears-eval --agent hybrid --config experiments/default.yaml
-
-# 限制題數（快速測試）
-uv run bears-eval --agent hybrid --limit 10
-
-# 分開存檔
-uv run bears-eval --agent hybrid --output output/hybrid.json
-uv run bears-eval --agent kg --output output/kg.json
-uv run bears-eval --agent agentic --output output/agentic.json
-
-# 詳細逐題結果
-uv run bears-eval --agent hybrid --detailed
-
-# 只看失敗的題目
-uv run bears-eval --agent hybrid --detailed --failures-only
-
-# 評估 orchestrator（Router → Agent）端到端
-uv run bears-eval --orchestrator
+# 前端（React + Vite，port 5173）
+cd frontend
+npm install    # 首次安裝
+npm run dev
 ```
 
-#### CLI 參數一覽
+- **Swagger UI**：http://127.0.0.1:8005/docs
+- **前端介面**：http://localhost:5173
 
-| 參數                | 說明                                      | 預設值                  |
-| ------------------- | ----------------------------------------- | ----------------------- |
-| `--agent NAME`    | 評估指定 agent（hybrid / kg / agentic）   | —                      |
-| `--orchestrator`  | 評估完整 orchestrator pipeline            | —                      |
-| `--config PATH`   | 實驗參數 YAML                             | None（使用預設值）      |
-| `--queries PATH`  | 題目 JSON 檔                              | `data/queries.json`   |
-| `--limit N`       | 限制評估題數                              | 全部                    |
-| `--output PATH`   | 輸出檔案路徑                              | `output/results.json` |
-| `--detailed`      | 輸出逐題詳細結果                          | False                   |
-| `--failures-only` | 搭配 `--detailed`，只輸出判定失敗的題目 | False                   |
-
-#### 評估輸出格式
-
-```json
-{
-  "overall": {
-    "total_questions": 647,
-    "hit_rate": 0.85,
-    "partial_hit_rate": 0.72,
-    "mrr": 0.68,
-    "map": 0.55,
-    "generation_pass_rate": 0.70,
-    "avg_total_time": 3.2
-  },
-  "by_source": {
-    "drcd": { "..." },
-    "hotpotqa": { "..." },
-    "2wiki": { "..." }
-  },
-  "by_question_type": {
-    "single-hop": { "..." },
-    "multi-hop": { "..." }
-  }
-}
-```
+> 前端 Vite dev server 已設定 proxy，所有 `/api` 請求自動轉發到 `http://localhost:8005`。
 
 ### Python API
 
@@ -287,36 +246,27 @@ import asyncio
 from bears.agents.registry import get_agent
 from bears.core.experiment import ExperimentConfig
 
-# 單一 Agent
+# 直接呼叫 AgenticAgent
 exp = ExperimentConfig.from_yaml("experiments/default.yaml")
-agent = get_agent("hybrid", experiment=exp)
+agent = get_agent("agentic", experiment=exp)
 result = asyncio.run(agent.run("台灣第一座國家公園是哪座？"))
 print(result.answer)
 print(result.retrieved_doc_ids)
 
-# Orchestrator（Router → Agent）
+# 透過 Orchestrator 入口（與 API 相同路徑）
 from bears.orchestrator.graph import run_orchestrated_rag
 result = asyncio.run(run_orchestrated_rag("美國銷售額第二大汽車租賃公司的執行長是誰？"))
 print(result["answer"])
 ```
 
-## 可用 Agent
-
-| 名稱           | 策略                                                                               |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `hybrid`     | 多查詢擴展 → 向量搜尋 → RRF 融合 → LLM 生成                                     |
-| `kg`         | 查詢擴展 → 向量+圖譜擴展 → LLM 重排序 → 圖譜檢索 → 推理生成（5 節點 pipeline） |
-| `agentic`    | 多步驟迭代檢索 → 逐步 LLM 重排序 → 推理下一步 → 距離+LLM 評分融合 → 生成       |
-| `multimodal` | Stub（未實作）                                                                     |
-
 ## 設定系統
 
 BEARS 採用**雙層設定分離**設計：
 
-| 層級               | 內容                            | 存放方式                                    | 進 Git？ |
-| ------------------ | ------------------------------- | ------------------------------------------- | -------- |
-| **系統設定** | API Keys、DB 連線、Langfuse     | `.env` (Pydantic Settings)                | 否       |
-| **實驗參數** | model、top_k、rerank alpha/beta | `experiments/*.yaml` (Pydantic BaseModel) | 是       |
+| 層級           | 內容                             | 存放方式                                    | 進 Git？ |
+| -------------- | -------------------------------- | ------------------------------------------- | -------- |
+| **系統設定** | API Keys、DB 連線、Langfuse      | `.env` (Pydantic Settings)                | 否       |
+| **實驗參數** | model、top_k、reranker 等        | `experiments/*.yaml` (Pydantic BaseModel) | 是       |
 
 ### 建立新實驗
 
@@ -325,16 +275,34 @@ BEARS 採用**雙層設定分離**設計：
 model: "gpt-4o-mini"
 temperature: 0.0
 top_k: 10
-rerank_alpha: 0.6
-rerank_beta: 0.4
-agent: "hybrid"
-```
-
-```bash
-uv run bears-eval --agent hybrid --config experiments/exp_topk10.yaml
+rerank_alpha: 0.7
+rerank_beta: 0.3
+use_cross_encoder: true
+reranker_model: "BAAI/bge-reranker-v2-m3"
+graph_expansion_hops: 2   # Graph 搜尋的跳數（1 = 1-hop, 2 = 2-hop subgraph）
+agent: "agentic"
 ```
 
 ## 開發指南
+
+### 新增一個 Generator（領域生成器）
+
+若要支援新的回答風格（如法律、醫療），只需繼承 `BaseGenerator`：
+
+1. 建立 `src/bears/generators/your_generator.py`：
+
+```python
+from bears.generators.base import BaseGenerator
+
+class YourGenerator(BaseGenerator):
+    SYSTEM_PROMPT = """你是 ... 的 AI 助理。
+    
+【參考資料】
+{context_block}
+"""
+```
+
+2. 在 `src/bears/api/routes/query.py` 的 `_get_generator()` 中登記名稱即可。
 
 ### 新增一個 Agent
 
@@ -372,47 +340,35 @@ AGENT_REGISTRY["your_agent"] = {
 }
 ```
 
-4. 測試：`uv run bears-eval --agent your_agent --limit 5`
-
 ## Tech Stack
 
-| 類別          | 技術                                     |
-| ------------- | ---------------------------------------- |
-| LLM           | OpenAI GPT-4o-mini（可在 YAML 切換）     |
-| 向量資料庫    | ChromaDB + OpenAI text-embedding-3-small |
-| 圖譜資料庫    | Neo4j                                    |
-| 編排框架      | LangGraph (StateGraph)                   |
-| LLM 框架      | LangChain                                |
-| Web API       | FastAPI                                  |
-| 前端          | React 19 + Vite + Recharts               |
-| Observability | Langfuse（選填）                         |
-| 套件管理      | uv + pyproject.toml (hatchling)          |
+| 類別             | 技術                                         |
+| ---------------- | -------------------------------------------- |
+| LLM              | OpenAI GPT-4o-mini（可在 YAML 切換）         |
+| 向量資料庫       | ChromaDB + OpenAI text-embedding-3-small     |
+| 圖譜資料庫       | Neo4j + APOC                                 |
+| Reranker         | BAAI/bge-reranker-v2-m3（本地 Cross-Encoder）|
+| BM25 搜尋        | rank-bm25（字符級切分，中英通用）            |
+| LLM 框架         | LangChain + LangGraph                        |
+| Web API          | FastAPI（含 lifespan singleton preload）     |
+| 前端             | React 19 + Vite                              |
+| Observability    | Langfuse（選填）                             |
+| 套件管理         | uv + pyproject.toml (hatchling)              |
 
 ## Web API
 
-除了 CLI 之外，BEARS 也提供 FastAPI Web API，支援前端 Dashboard 呼叫。
-
-### 啟動 API Server
-
-```bash
-uv run uvicorn bears.api.api:app --reload --port 8005
-```
-
-Swagger UI：http://127.0.0.1:8005/docs
-
 ### API Endpoints
 
-#### 評估 (`/api/eval/`)
+#### 查詢與評估 (`/api/`)
 
-| Endpoint                         | 方法 | 說明                         |
-| -------------------------------- | ---- | ---------------------------- |
-| `/api/eval/start`              | POST | 啟動評估任務（回傳 task_id） |
-| `/api/eval/status/{task_id}`   | GET  | 查詢評估進度（即時更新）     |
-| `/api/eval/results/{task_id}`  | GET  | 取得評估結果                 |
-| `/api/eval/history`            | GET  | 列出歷史評估檔案             |
-| `/api/eval/history/{filename}` | GET  | 讀取特定歷史結果             |
-| `/api/eval/agents`             | GET  | 列出可用 agents              |
-| `/api/eval/queries/stats`      | GET  | 題目統計                     |
+| Endpoint              | 方法 | 說明                                         |
+| --------------------- | ---- | -------------------------------------------- |
+| `/api/retrieve`     | POST | 執行 Agentic RAG，回傳 Q/A/Context + 計時   |
+| `/api/generate`     | POST | Retrieve → 指定 Generator 二次生成           |
+| `/api/evaluate`     | POST | 串流批次評估（NDJSON），儲存結果到 `output/` |
+| `/api/history`      | GET  | 列出歷史評估結果檔案（最新 50 筆）           |
+| `/api/history/{fn}` | GET  | 讀取特定歷史結果                             |
+| `/api/health`       | GET  | Liveness check                               |
 
 #### 文件查詢 (`/api/docs/`)
 
@@ -430,30 +386,47 @@ Swagger UI：http://127.0.0.1:8005/docs
 | `/api/experiments/{name}` | PUT    | 更新實驗參數     |
 | `/api/experiments/{name}` | DELETE | 刪除實驗參數     |
 
+### Retrieve 回應格式
+
+```json
+{
+  "question": "台灣第一座國家公園是哪座？",
+  "answer": "墾丁國家公園",
+  "context": ["[1][vector] 墾丁國家公園成立於...", "..."],
+  "retrieval_time": 0.85,
+  "generation_time": 1.23,
+  "total_time": 2.08,
+  "prompt_tokens": 1500,
+  "completion_tokens": 80,
+  "total_tokens": 1580,
+  "tool_used": ["vector", "keyword"]
+}
+```
+
+### Evaluate 串流格式
+
+`POST /api/evaluate` 回傳 **NDJSON** 串流，每行一筆結果：
+
+```jsonl
+{"question":"...","answer":"...","context":[...],"total_time":2.1,"_progress":{"current":1,"total":10}}
+{"question":"...","answer":"...","context":[...],"total_time":1.8,"_progress":{"current":2,"total":10}}
+{"_done":true,"output_file":"output/eval_20260501_120000.json","count":10}
+```
+
 ## Frontend Dashboard
 
-React + Vite 建構的評估系統前端介面，詳細說明請參閱 [`frontend/README.md`](frontend/README.md)。
+React + Vite 建構的前端介面，含兩個主要頁面：
 
-### 啟動前端
+| 頁面            | 說明                                                                           |
+| --------------- | ------------------------------------------------------------------------------ |
+| **Chatbot**   | 即時問答介面，呼叫 `/api/generate`，以 `educational` generator 組成回答       |
+| **EvalBatch** | 批次評估控制台：上傳 queries、設定實驗參數、串流進度、查看歷史結果與圖表比較  |
 
 ```bash
 cd frontend
 npm install          # 首次安裝依賴
 npm run dev          # 啟動開發伺服器（http://localhost:5173）
 ```
-
-> 前端 Vite dev server 已設定 proxy，會自動將 `/api` 請求轉發到 `http://localhost:8005`。
-
-### 功能頁面
-
-| 頁面                  | 說明                                                              |
-| --------------------- | ----------------------------------------------------------------- |
-| **Dashboard**   | 題目統計、Agent 總覽、啟動評估（含即時進度條）、查看結果          |
-| **History**     | 瀏覽歷史評估結果檔案，點擊查看詳情                                |
-| **EvalResult**  | 圖表 + 表格呈現 Overall / By Source / By Type / Per-Question 指標 |
-| **Experiments** | 建立、編輯、刪除實驗參數 YAML                                     |
-
-每題可點擊展開詳情（Question Detail Modal），顯示完整指標並支援 doc_id 展開查看 ChromaDB 原文。
 
 ## CI / 自動化
 
