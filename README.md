@@ -11,8 +11,8 @@ flowchart TD
     subgraph AGENT["AgenticAgent"]
         subgraph P1A["Phase 1a — 並行 LLM 分析"]
             direction LR
-            RP["Retrieval Planner<br/>gpt-4o-mini<br/>決定啟用哪些搜尋引擎"]
-            QC["Question Type Classifier<br/>gpt-4o-mini<br/>factual / open_ended"]
+            RP["Retrieval Planner<br/>"]
+            QC["Question Type Classifier"]
         end
 
         subgraph P1B["Phase 1b — 並行搜尋"]
@@ -24,7 +24,7 @@ flowchart TD
 
         RK["Phase 2 — Cross-Encoder Reranker<br/>BAAI/bge-reranker-v2-m3<br/>Chunk Pool 去重排序 → Top-K"]
 
-        SY["Phase 3 — Final LLM Synthesis<br/>gpt-4o-mini<br/>factual prompt ／ open_ended prompt"]
+        SY["Phase 3 — Final LLM "]
     end
 
     ANS(["Final Answer"])
